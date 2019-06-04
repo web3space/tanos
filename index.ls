@@ -1,4 +1,5 @@
 require! {
+    \require-ls
     \./send-media.ls
     \./delete-message.ls
     \prelude-ls : { obj-to-pairs, join }
