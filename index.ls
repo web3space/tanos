@@ -14,14 +14,18 @@ require! {
     \./edit-message.ls
     \./make-bot.ls
     \./make-db-manager.ls
-    
 }
 
-module.exports = ( { telegram-token, providers, config }, cb)->
+module.exports = ( { telegram-token, app, layout, db-type, server-address, server-port }, cb)->
+    
+    tanos = {}
     
     bot = make-bot telegram-token
-    
-    { get, put, del } = make-db-manager config
+    err, db <- make-db-manager layout, db-type
+    return cb err if err?
+    { get, put, del } = db
+
+    $app = app { db, bot, tanos }
 
     default-user = (chat_id)-> { chat_id }
     
@@ -31,18 +35,58 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         return cb null, item if item?
         return cb null, default-user chat_id
     
+    tanos.get-user = get-user
+    
     save-user = (chat_id, user, cb)->
         put "#{chat_id}:chat_id", user, cb
     
+    save-global = ($global, cb)->
+        err <- put \variables:global , $global
+        return cb err if err?
+        cb null
+    
+    tanos.save-global = save-global
+    
+    get-global = (cb)->
+        err, data <- get \variables:global
+        obj =
+            | err? => {}
+            | _ => data ? {}
+        cb null, obj
+        
+    tanos.get-global = get-global
+    
+    send-each-user = ([chat_id, ...rest], current_step, cb)->
+        return cb null if not chat_id?
+        message =
+            from:
+                id: chat_id
+            text: ""
+        err <- goto current_step, message
+        return cb err if err?
+        cb null
+    
+    tanos.send-user = (chat_id, current_step, cb)->
+        chat_ids =
+            | typeof! chat_id is \Array => chat_id
+            | typeof! chat_id is \Number => [chat_id]
+        send-each-user chat_ids, current_step, cb
+        
+        
+    
     handler-text-user = (chat_id,input-text, cb)->
         err, $user <- get-user chat_id
+        return cb err if err?
+        err, $global <- get-global
         return cb err if err?
         text =
             | typeof! input-text is \Array => input-text |> join \\n
             | typeof! input-text is \String => input-text
             | _ => "ERR: Unsupported type of text"
         template = handlebars.compile text
-        result = template { $user }
+        result = template { $user, $app, $global }
+        err <- save-global $global
+        return cb err if err?
         cb null, result
     
     run-commands = (message, text, [command, ...commands], cb)->
@@ -65,7 +109,6 @@ module.exports = ( { telegram-token, providers, config }, cb)->
             obj-to-pairs $store
         save-store-items pairs, cb
     
-    
     get-chat-id = (message)->
         chat_id = (message.chat ? message.from).id
     
@@ -81,19 +124,44 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         return cb err if err?
         $chat = message.chat
         $message_id = message.message_id
-        $store = {}
+        
         script = new vm.Script javascript
-        context = new vm.create-context { $user, $providers: providers, $store, $text, $chat }
+        $store = {}
+        err, $global <- get-global
+        return cb err if err?
+        context = new vm.create-context { $user, $app, $store, $text, $chat, $global }
         script.run-in-context context
+        err <- save-global $global
+        return cb err if err?
         err <- save-user chat_id, $user
         return cb err if err? 
         err <- save-store $store
         return cb err if err
         cb null
     
-    
+    run-function = (message, $text, command, cb)->
+        chat_id = get-chat-id message
+        err, $user <- get-user-by-message message
+        return cb err if err?
+        $chat = message.chat
+        $store = {}
+        err, $global <- get-global
+        return cb err if err?
+        javascript = livescript.compile command, { bare: yes }
+        #console.log javascript
+        func = eval "t = #{javascript}"
+        err <- func { $user, $app, $store, $text, $chat, $global }
+        return cb err if err?
+        err <- save-global $global
+        return cb err if err?
+        err <- save-user chat_id, $user
+        return cb err if err? 
+        err <- save-store $store
+        return cb err if err
+        cb null
     
     run-livescript = (message, $text, command, cb)->
+        return run-function message, $text, command, cb if command.index-of('->') > -1
         javascript = livescript.compile command, { bare: yes }
         run-javascript message, $text, javascript, cb
         
@@ -102,10 +170,10 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         run-livescript message, $text, command, cb
         
     build-command-hash = ({current_step, previous_step, name, menu-map}, cb)->
-        return cb null, "request_location" if menu-map.buttons?[name] is \request_location
-        return cb null, "request_location" if menu-map.menu?[name] is \request_location
-        return cb null, "request_contact" if menu-map.buttons?[name] is \request_contact
-        return cb null, "request_contact" if menu-map.menu?[name] is \request_contact
+        return cb null, "request_location"      if menu-map.buttons?[name] is \request_location
+        return cb null, "request_location"      if menu-map.menu?[name] is \request_location
+        return cb null, "request_contact"       if menu-map.buttons?[name] is \request_contact
+        return cb null, "request_contact"       if menu-map.menu?[name] is \request_contact
         return cb null, "goto:#{previous_step}" if menu-map.buttons?[name] is \goto:$previous-step
         return cb null, "goto:#{previous_step}" if menu-map.menu?[name] is \goto:$previous-step
         cb null, "#{current_step}:#{name}"
@@ -160,10 +228,12 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         javascript = livescript.compile command, { bare: yes }
         err, $user <- get-user-by-message message
         return cb err if err?
+        err, $global <- get-global
+        return cb err if err?
         script = new vm.Script javascript
         $check =
             result: no
-        context = new vm.create-context { $user, $providers: providers, $check }
+        context = new vm.create-context { $user, $app, $check, $global }
         result = script.run-in-context context
         cb null, $check.result
     
@@ -186,6 +256,16 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         err, current_step <- handler-text-user message.from.id, current_step_guess
         return cb err if err?
         cb null, current_step
+    
+    execute-on-enter = (menu-map, message, cb)->
+        on-enter = 
+            | typeof! menu-map.on-enter is \Array => menu-map.on-enter
+            | typeof! menu-map.on-enter is \String => [menu-map.on-enter]
+            | _ => []
+        text = \#enter
+        err <- run-commands message, text, on-enter
+        return cb err if err?
+        cb null
     goto = (current_step_guess, message, cb)->
         err, current_step <- unvar-step current_step_guess, message
         return cb err if err?
@@ -203,6 +283,8 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         err, main-map <- get "main:bot-step"
         return cb err if err?
         menu-map = current-map ? main-map
+        err <- execute-on-enter menu-map, message
+        return cb err if err?
         chat_id = message.from.id
         err, buttons <- get-buttons { chat_id, current_step, menu-map, previous_step }
         return cb err if err?
@@ -240,25 +322,30 @@ module.exports = ( { telegram-token, providers, config }, cb)->
             | previous_step_guess? => previous_step_guess
             | _ => \main
         cb null, previous_step
-    
+
     on-command = (message, cb)->
         return cb null, no if not message?message?message_id?
         err, previous_step <- get-previous-step message
-        #console.log { previous_step }
+        
         return cb err, no if err?
-        server-address = \http://95.179.164.233:3000
+        #server-address = \http://95.179.164.233:3000
         #console.log message.photo if message.photo?
+        addr = "#{server-address}:#{server-port}"
         text = 
             | message.data? => message.data
             | message.text? => message.text
             | message.contact? => "#{message.contact.phone_number} #{message.contact.first_name} #{message.contact.last_name}"
             | message.location? => "<a href='https://www.google.com/maps/@#{message.location.latitude},#{message.location.longitude},15z'>Место на карте</a>"
-            | message.photo?0? => "<a href='#{server-address}/get-file/#{message.photo.0.file_id}'>Фотография</a>"
-            | message.video? => "<a href='#{server-address}/get-file/#{message.video.file_id}'>Видео</a>"
-            | message.voice? => "<a href='#{server-address}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
+            | message.document? => "<a href='#{addr}/get-file/#{message.document.file_id}'>Документ</a>"
+            | message.photo?0? => "<a href='#{addr}/get-file/#{message.photo.0.file_id}'>Фотография</a>"
+            | message.video? => "<a href='#{addr}/get-file/#{message.video.file_id}'>Видео</a>"
+            | message.voice? => "<a href='#{addr}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
             | _ => message.text
-        err, previous-step <- get "#{previous_step}:bot-step"
+        #console.log { previous_step, text, props: Object.keys(message) }
+        err, main-step <- get "main:bot-step"
         return cb err if err?
+        err, previous-step-guess <- get "#{previous_step}:bot-step"
+        previous-step = previous-step-guess ? main-step
         clicked-button =
             | not text? => \goto:main
             | (text ? "").index-of('goto:') > -1 => text
@@ -364,7 +451,7 @@ module.exports = ( { telegram-token, providers, config }, cb)->
     proxy-file = (req, res)->
         { file_id } = req.params
         err, data <- bot.get-file { file_id }
-        return res.status(400).send("#{err}") if err?
+        return res.status(400).send("cannot get file: #{err}") if err?
         request.get("https://api.telegram.org/file/bot#{telegram-token}/#{data.file_path}").pipe(res)
     express!
         .use body-parser.urlencoded({ extended: true })
@@ -374,4 +461,4 @@ module.exports = ( { telegram-token, providers, config }, cb)->
         .get \/google8b809baeb12ee9e4.html, (req, res)-> res.sendFile(__dirname+"/google8b809baeb12ee9e4.html") # for excel
         .post \/api/message/:message/:token , (req, res) -> process-http-message req.params, restify(res)
         .get \/api/message/:message/:token , (req, res)-> process-http-message req.params, restify(res)  
-        .listen 3000, cb
+        .listen server-port, -> cb null, "Tanos is started"

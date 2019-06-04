@@ -1,12 +1,5 @@
 require! {
     \prelude-ls : { map, foldl }
-    \./res/menu.ls
-    \./res/cancel.ls
-    \./res/categories.ls
-    \./res/pizzacat.ls
-    \./res/suhhi.ls
-    \./res/hahlik.ls
-    \./res/burgers.ls
 }
 
 request_location = (text)->
