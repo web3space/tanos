@@ -490,6 +490,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         .post \/api/message/:message/:token , (req, res) -> process-http-message req.params, restify(res)
         .get \/api/message/:message/:token , (req, res)-> process-http-message req.params, restify(res)
     start =
-        | not server-ssl-port? => start-with-ssl
+        | server-ssl-port? => start-with-ssl
         | _ => start-without-ssl
     start cb
