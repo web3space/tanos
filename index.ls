@@ -15,7 +15,7 @@ require! {
     \./edit-message.ls
     \./make-bot.ls
     \./make-db-manager.ls
-    \greenlock-express
+    \greenlock-express : { create }
     \greenlock-store-fs
 }
 
