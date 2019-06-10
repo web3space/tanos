@@ -964,7 +964,8 @@
           return request.get("https://api.telegram.org/file/bot" + telegramToken + "/" + data.file_path).pipe(res);
         });
       };
-      return express().use(bodyParser.urlencoded({
+      tanos.httpApp = express();
+      return tanos.httpApp.use(bodyParser.urlencoded({
         extended: true
       })).use(bodyParser.json()).use(cors()).get('/get-file/:file_id', proxyFile).get('/google8b809baeb12ee9e4.html', function(req, res){
         return res.sendFile(__dirname + "/google8b809baeb12ee9e4.html");

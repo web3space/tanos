@@ -17,16 +17,18 @@ require! {
     \./make-db-manager.ls
 }
 
-module.exports = ( { telegram-token, app, layout, db-type, server-address, server-port }, cb)->
-    
+module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port }, cb)->
     tanos = {}
-    
     bot = make-bot telegram-token
+    tanos.bot = bot
     err, db <- make-db-manager layout, db-type
     return cb err if err?
+    
     { get, put, del } = db
-
-    $app = app { db, bot, tanos }
+    
+    tanos.db = db
+    
+    $app = app tanos
 
     default-user = (chat_id)-> { chat_id }
     
@@ -454,7 +456,8 @@ module.exports = ( { telegram-token, app, layout, db-type, server-address, serve
         err, data <- bot.get-file { file_id }
         return res.status(400).send("cannot get file: #{err}") if err?
         request.get("https://api.telegram.org/file/bot#{telegram-token}/#{data.file_path}").pipe(res)
-    express!
+    tanos.http = express!
+    tanos.http
         .use body-parser.urlencoded({ extended: true })
         .use body-parser.json!
         .use cors!
@@ -462,4 +465,4 @@ module.exports = ( { telegram-token, app, layout, db-type, server-address, serve
         .get \/google8b809baeb12ee9e4.html, (req, res)-> res.sendFile(__dirname+"/google8b809baeb12ee9e4.html") # for excel
         .post \/api/message/:message/:token , (req, res) -> process-http-message req.params, restify(res)
         .get \/api/message/:message/:token , (req, res)-> process-http-message req.params, restify(res)  
-        .listen server-port, -> cb null, "Tanos is started"
+        .listen server-port, -> cb null, tanos

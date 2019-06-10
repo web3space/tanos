@@ -28,4 +28,5 @@ button-strategy = (buttons, menu)->
     inline_keyboard: buttons |> map transform-button |> foldl group-button, []
 module.exports = (buttons=[], menu=[])->
     inline-keyboard = button-strategy buttons, menu
+    #console.log { inline-keyboard.inline_keyboard } 
     JSON.stringify inline-keyboard
