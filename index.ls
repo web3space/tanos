@@ -15,9 +15,11 @@ require! {
     \./edit-message.ls
     \./make-bot.ls
     \./make-db-manager.ls
+    \greenlock-express
+    \greenlock-store-fs
 }
 
-module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port }, cb)->
+module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port }, cb)->
     tanos = {}
     bot = make-bot telegram-token
     tanos.bot = bot
@@ -456,7 +458,29 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, data <- bot.get-file { file_id }
         return res.status(400).send("cannot get file: #{err}") if err?
         request.get("https://api.telegram.org/file/bot#{telegram-token}/#{data.file_path}").pipe(res)
+        
+        
+    
     tanos.http = express!
+    
+    start-with-ssl = (cb)->
+        greenlock =
+            create do
+                email: \a.stegno@gmail.com
+                agreeTos: yes          
+                config-dir: \./config/acme/
+                community-member: no
+                telemetry: no
+                app: tanos.http
+                debug: no
+                store: greenlock-store-fs
+        greenlock.listen(server-port, server-ssl-port)
+        cb err, tanos
+    
+    start-without-ssl = (cb)->
+        err <- tanos.http.listen server-port
+        cb err, tanos
+        
     tanos.http
         .use body-parser.urlencoded({ extended: true })
         .use body-parser.json!
@@ -464,5 +488,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         .get \/get-file/:file_id, proxy-file
         .get \/google8b809baeb12ee9e4.html, (req, res)-> res.sendFile(__dirname+"/google8b809baeb12ee9e4.html") # for excel
         .post \/api/message/:message/:token , (req, res) -> process-http-message req.params, restify(res)
-        .get \/api/message/:message/:token , (req, res)-> process-http-message req.params, restify(res)  
-        .listen server-port, -> cb null, tanos
+        .get \/api/message/:message/:token , (req, res)-> process-http-message req.params, restify(res)
+    start =
+        | not server-ssl-port? => start-with-ssl
+        | _ => start-without-ssl
+    start cb
