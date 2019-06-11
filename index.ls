@@ -21,7 +21,7 @@ require! {
 }
 
 process-validator = (validator, text, cb)->
-    cb validator if not validator.match(text)?
+    return cb validator if not text.match(new RegExp(validator))?
     cb null
 process-validators = ([vaidator, ...rest], text, cb)->
     return cb null if not validator?
@@ -30,8 +30,9 @@ process-validators = ([vaidator, ...rest], text, cb)->
     process-validators rest, text, cb
 process-text-validators = (step, text, cb)->
     return cb null if not step.on-text?validate?
-    process-validators step.validate, text, cb if typeof! step.validate is \Array
-    process-validator step.validate, text, cb if typeof! step.validate is \RegExp
+    { validate } = step.on-text
+    return process-validators validate, text, cb if typeof! validate is \Array
+    return process-validator validate, text, cb if typeof! validate is \String
     cb null
 
 module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port }, cb)->
@@ -171,7 +172,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, $global <- get-global
         return cb err if err?
         javascript = livescript.compile command, { bare: yes }
-        #console.log javascript
         func = eval "t = #{javascript}"
         err <- func { $user, $app, $store, $text, $chat, $global }
         return cb err if err?
@@ -349,13 +349,16 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | _ => \main
         cb null, previous_step
 
+    prevent-action = ({ bot, chat, text}, cb)->
+        #console.log \FAILED_VALIDATION, text, chat
+        err <- send-media { bot, chat, text }
+        return cb err, no if err?
+        return cb null, yes
     on-command = (message, cb)->
         return cb null, no if not message?message?message_id?
         err, previous_step <- get-previous-step message
         
         return cb err, no if err?
-        #server-address = \http://95.179.164.233:3000
-        #console.log message.photo if message.photo?
         addr = "#{server-address}:#{server-port}"
         text = 
             | message.data? => message.data
@@ -367,15 +370,14 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | message.video? => "<a href='#{addr}/get-file/#{message.video.file_id}'>Видео</a>"
             | message.voice? => "<a href='#{addr}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
             | _ => message.text
-        #console.log { previous_step, text, props: Object.keys(message) }
         err, main-step <- get "main:bot-step"
         return cb err if err?
         err, previous-step-guess <- get "#{previous_step}:bot-step"
         previous-step = previous-step-guess ? main-step
+        #console.log \BEFORE_VALIDATION, text, message.from
         err <- process-text-validators previous-step, message.text
-        console.log { err, previous-step.on-text, message.text }
-        return send-media { bot, chat: message.from, text: "Ожидается другое значение c маской #{err}" }, cb if err?
-        console.log { message.type }
+        return prevent-action { bot, chat: message.from, text: "Ожидается другое значение c маской #{err}" }, cb if err?
+        #console.log \OKKK_VALIDATION, text, message.from
         clicked-button =
             | not text? => \goto:main
             | (text ? "").index-of('goto:') > -1 => text
@@ -386,7 +388,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | previous-step.on-text? and message.type isnt \callback_query => previous-step.on-text
             | _ => null
         return on-command {data: "main:#{message.text}", ...message }, cb if message.text? and not message.data? and clicked-button is null and previous_step isnt \main
-        #console.log { previous_step, clicked-button, previous-step.buttons, text }
+        
         clicked-button = clicked-button ? \goto:main
         commands =
                 | typeof! clicked-button.store is \String => [clicked-button.store]
@@ -446,7 +448,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     
     bot.on \update , (result)->
         message = result.message ? result.callback_query
-        console.log { message }
         #message.text = unhash message.text if message.text?
         message.data = unhash message.data if message.data?
         type =
@@ -454,7 +455,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | message.text.index-of('​') > -1 => \callback_query
             | _ => \message
         message.text = message.text.replace('​', '') if message.text?
-        #console.log result
         <- update-previous-messsage { type, message }
         process-messsage { message, type, ...message }, trace
     
