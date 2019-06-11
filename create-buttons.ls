@@ -1,5 +1,6 @@
 require! {
     \prelude-ls : { map, foldl }
+    \string-hash
 }
 
 request_location = (text)->
@@ -9,9 +10,14 @@ request_contact = (text)->
     request_contact = yes
     [ { text, request_contact } ]
 
-transform-button = ([text, callback_data])->
-    return request_location(text) if callback_data is \request_location
-    return request_contact(text) if callback_data is \request_contact
+dictionary = {}
+
+transform-button = ([text_str, callback_data_str])->
+    return request_location(text) if callback_data_str is \request_location
+    return request_contact(text) if callback_data_str is \request_contact
+    callback_data = "__" + string-hash(callback_data_str)
+    dictionary[callback_data] = callback_data_str
+    text = "​#{text_str}"
     [ { text, callback_data } ]
 
 group-button = (collector, button)->
@@ -30,3 +36,13 @@ module.exports = (buttons=[], menu=[])->
     inline-keyboard = button-strategy buttons, menu
     #console.log { inline-keyboard.inline_keyboard } 
     JSON.stringify inline-keyboard
+
+
+ishash = (hash)->
+    console.log hash
+    return (hash ? "").index-of('__') is 0
+unhash = (hash)->
+    return hash if not ishash(hash)?
+    dictionary[hash]
+
+module.exports <<<< { ishash, unhash }

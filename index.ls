@@ -17,7 +17,22 @@ require! {
     \./make-db-manager.ls
     \greenlock-express : { create }
     \greenlock-store-fs
+    \./create-buttons.ls : { unhash, ishash }
 }
+
+process-validator = (validator, text, cb)->
+    cb validator if not validator.match(text)?
+    cb null
+process-validators = ([vaidator, ...rest], text, cb)->
+    return cb null if not validator?
+    err <- process-validator validator, text
+    return cb err if err?
+    process-validators rest, text, cb
+process-text-validators = (step, text, cb)->
+    return cb null if not step.on-text?validate?
+    process-validators step.validate, text, cb if typeof! step.validate is \Array
+    process-validator step.validate, text, cb if typeof! step.validate is \RegExp
+    cb null
 
 module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port }, cb)->
     tanos = {}
@@ -135,7 +150,10 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, $global <- get-global
         return cb err if err?
         context = new vm.create-context { $user, $app, $store, $text, $chat, $global }
-        script.run-in-context context
+        try
+            script.run-in-context context
+        catch err
+            cb err
         err <- save-global $global
         return cb err if err?
         err <- save-user chat_id, $user
@@ -239,7 +257,10 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         $check =
             result: no
         context = new vm.create-context { $user, $app, $check, $global }
-        result = script.run-in-context context
+        try
+            script.run-in-context context
+        catch err
+            return cb err
         cb null, $check.result
     
     process-conditions = ([condition, ...conditions], message, cb)->
@@ -351,6 +372,10 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb err if err?
         err, previous-step-guess <- get "#{previous_step}:bot-step"
         previous-step = previous-step-guess ? main-step
+        err <- process-text-validators previous-step, message.text
+        console.log { err, previous-step.on-text, message.text }
+        return send-media { bot, chat: message.from, text: "Ожидается другое значение c маской #{err}" }, cb if err?
+        console.log { message.type }
         clicked-button =
             | not text? => \goto:main
             | (text ? "").index-of('goto:') > -1 => text
@@ -358,7 +383,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | (text ? "").index-of(':') > -1 and previous-step.menu?[text.split(':').1]? => previous-step.menu[text.split(':').1]
             | previous-step.buttons?[text]? => previous-step.buttons[text]
             | previous-step.menu?[text]? => previous-step.menu[text]
-            | previous-step.on-text? => previous-step.on-text
+            | previous-step.on-text? and message.type isnt \callback_query => previous-step.on-text
             | _ => null
         return on-command {data: "main:#{message.text}", ...message }, cb if message.text? and not message.data? and clicked-button is null and previous_step isnt \main
         #console.log { previous_step, clicked-button, previous-step.buttons, text }
@@ -406,6 +431,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     
     update-previous-messsage = ({ type, message }, cb)->
         return cb null if type is \message
+        return cb null if not message?message?
         option =
             | message.data?index-of(':') > -1 => message.data.split(":").1
             | _ => message.data
@@ -420,11 +446,17 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     
     bot.on \update , (result)->
         message = result.message ? result.callback_query
+        console.log { message }
+        #message.text = unhash message.text if message.text?
+        message.data = unhash message.data if message.data?
         type =
             | result.callback_query? => \callback_query
+            | message.text.index-of('​') > -1 => \callback_query
             | _ => \message
+        message.text = message.text.replace('​', '') if message.text?
+        #console.log result
         <- update-previous-messsage { type, message }
-        process-messsage { message, ...message }, trace
+        process-messsage { message, type, ...message }, trace
     
     get-from-id = ({ message, token }, cb)->
         err, record <- get "#{token}:access-keys"
