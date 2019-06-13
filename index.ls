@@ -85,7 +85,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             text: ""
         err <- goto current_step, message
         return cb err if err?
-        cb null
+        send-each-user rest, current_step, cb
     
     tanos.send-user = (chat_id, current_step, cb)->
         chat_ids =
