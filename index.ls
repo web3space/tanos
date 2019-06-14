@@ -11,6 +11,7 @@ require! {
     \livescript
     \handlebars
     \request
+    \superagent
     \./merge-images.ls
     \./edit-message.ls
     \./make-bot.ls
@@ -18,9 +19,15 @@ require! {
     \greenlock-express : { create }
     \greenlock-store-fs
     \./create-buttons.ls : { unhash, ishash }
+    \./telegram-passport.ls : { get-telegram-passport-text, passport-script-proxy, passport-index-proxy, passport-success-proxy, passport-canceled-proxy, proxy-passport-file }
+    \fs : { read-file, read-file-sync, write-file-sync } 
 }
 
+
+
+
 process-validator = (validator, text, cb)->
+    return cb "text is required" if typeof! text isnt \String
     return cb validator if not text.match(new RegExp(validator))?
     cb null
 process-validators = ([vaidator, ...rest], text, cb)->
@@ -35,7 +42,8 @@ process-text-validators = (step, text, cb)->
     return process-validator validate, text, cb if typeof! validate is \String
     cb null
 
-module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port }, cb)->
+module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port, bot-name }, cb)->
+    server-addr = "#{server-address}:#{server-ssl-port ? server-port}"
     tanos = {}
     bot = make-bot telegram-token
     tanos.bot = bot
@@ -197,6 +205,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb null, "request_location"      if menu-map.menu?[name] is \request_location
         return cb null, "request_contact"       if menu-map.buttons?[name] is \request_contact
         return cb null, "request_contact"       if menu-map.menu?[name] is \request_contact
+        return cb null, menu-map.buttons?[name] if (menu-map.buttons?[name] ? "").index-of('request_passport') is 0
         return cb null, "goto:#{previous_step}" if menu-map.buttons?[name] is \goto:$previous-step
         return cb null, "goto:#{previous_step}" if menu-map.menu?[name] is \goto:$previous-step
         cb null, "#{current_step}:#{name}"
@@ -326,7 +335,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         chat = message.from
         err, text <- handler-text-user chat_id, menu-map.text
         return cb err if err?
-        message-body = { bot, chat, photo, buttons, text, menu }
+        message-body = { bot, chat, photo, buttons, text, menu, server-addr }
         err, next-message <- send-media message-body
         return cb err, no if err?
         err <- put "#{next-message.message_id}:message", { current_step, ...message-body }
@@ -351,25 +360,32 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
 
     prevent-action = ({ bot, chat, text}, cb)->
         #console.log \FAILED_VALIDATION, text, chat
-        err <- send-media { bot, chat, text }
+        err <- send-media { bot, chat, text, server-addr }
         return cb err, no if err?
         return cb null, yes
-    on-command = (message, cb)->
-        return cb null, no if not message?message?message_id?
-        err, previous_step <- get-previous-step message
-        
-        return cb err, no if err?
-        addr = "#{server-address}:#{server-port}"
+    
+    get-text = (message, cb)->
+        return get-telegram-passport-text {server-addr, db }, message, cb if message.passport_data?
         text = 
             | message.data? => message.data
             | message.text? => message.text
             | message.contact? => "#{message.contact.phone_number} #{message.contact.first_name} #{message.contact.last_name}"
             | message.location? => "<a href='https://www.google.com/maps/@#{message.location.latitude},#{message.location.longitude},15z'>Место на карте</a>"
-            | message.document? => "<a href='#{addr}/get-file/#{message.document.file_id}'>Документ</a>"
-            | message.photo?0? => "<a href='#{addr}/get-file/#{message.photo.0.file_id}'>Фотография</a>"
-            | message.video? => "<a href='#{addr}/get-file/#{message.video.file_id}'>Видео</a>"
-            | message.voice? => "<a href='#{addr}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
+            | message.document? => "<a href='#{server-addr}/get-file/#{message.document.file_id}'>Документ</a>"
+            | message.photo?0? => "<a href='#{server-addr}/get-file/#{message.photo.0.file_id}'>Фотография</a>"
+            | message.video? => "<a href='#{server-addr}/get-file/#{message.video.file_id}'>Видео</a>"
+            | message.voice? => "<a href='#{server-addr}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
             | _ => message.text
+        return cb null, text
+    on-command = (message, cb)->
+        return cb null, no if not message?message?message_id?
+        err, previous_step <- get-previous-step message
+        
+        return cb err, no if err?
+        
+        err, text <- get-text message
+        return cb err if err?
+        
         err, main-step <- get "main:bot-step"
         return cb err if err?
         err, previous-step-guess <- get "#{previous_step}:bot-step"
@@ -447,12 +463,13 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     
     
     bot.on \update , (result)->
+        #console.log result
         message = result.message ? result.callback_query
         #message.text = unhash message.text if message.text?
         message.data = unhash message.data if message.data?
         type =
             | result.callback_query? => \callback_query
-            | message.text.index-of('​') > -1 => \callback_query
+            | message.text? and message.text.index-of('​') > -1 => \callback_query
             | _ => \message
         message.text = message.text.replace('​', '') if message.text?
         <- update-previous-messsage { type, message }
@@ -491,7 +508,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return res.status(400).send("cannot get file: #{err}") if err?
         request.get("https://api.telegram.org/file/bot#{telegram-token}/#{data.file_path}").pipe(res)
         
-        
     
     tanos.http = express!
     
@@ -517,8 +533,14 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         .use body-parser.urlencoded({ extended: true })
         .use body-parser.json!
         .use cors!
+        .get \/telegram-passport/script.js , passport-script-proxy
+        .get \/telegram-passport/index.html , passport-index-proxy { server-addr, telegram-token, db, bot-name }
+        .get \/telegram-passport/tg_passport=success , passport-success-proxy({ bot-name })
+        .get \/telegram-passport/tg_passport=canceled , passport-canceled-proxy({ bot-name })
+        .get \/telegram-passport , passport-success-proxy({ bot-name })
         .get \/get-file/:file_id, proxy-file
-        .get \/google8b809baeb12ee9e4.html, (req, res)-> res.sendFile(__dirname+"/google8b809baeb12ee9e4.html") # for excel
+        .get \/get-decrypted-file/:file_id, proxy-passport-file { bot, telegram-token, db }
+        #.get \/google8b809baeb12ee9e4.html, (req, res)-> res.sendFile(__dirname+"/google8b809baeb12ee9e4.html") # for excel
         .post \/api/message/:message/:token , (req, res) -> process-http-message req.params, restify(res)
         .get \/api/message/:message/:token , (req, res)-> process-http-message req.params, restify(res)
     start =
