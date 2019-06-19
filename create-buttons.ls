@@ -12,7 +12,7 @@ request_contact = (text)->
 
 request_passport= (server-addr, text, callback_data_str)->
     #console.log callback_data_str
-    [ head, ...rest ] = callback_data_str.split(' ')
+    [ head, ...rest ] = (callback_data_str ? "").split(' ')
     request = rest.join \.
     [ { text, url: "#{server-addr}/telegram-passport/index.html?request=#{request}" } ]
 
@@ -35,10 +35,10 @@ group-button = (collector, button)->
     collector ++ [button]
 
 
-button-strategy = (server-addr, buttons, menu)->
+button-strategy = (server-addr, buttons=[], menu=[])->
     resize_keyboard: yes
-    keyboard: menu |> map transform-button server-addr |> foldl group-button, []
-    inline_keyboard: buttons |> map transform-button server-addr |> foldl group-button, []
+    keyboard: menu ? [] |> map transform-button server-addr |> foldl group-button, []
+    inline_keyboard: buttons ? [] |> map transform-button server-addr |> foldl group-button, []
 module.exports = (server-addr, buttons=[], menu=[])->
     inline-keyboard = button-strategy server-addr, buttons, menu
     #console.log { inline-keyboard.inline_keyboard } 

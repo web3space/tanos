@@ -205,7 +205,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb null, "request_location"      if menu-map.menu?[name] is \request_location
         return cb null, "request_contact"       if menu-map.buttons?[name] is \request_contact
         return cb null, "request_contact"       if menu-map.menu?[name] is \request_contact
-        return cb null, menu-map.buttons?[name] if (menu-map.buttons?[name] ? "").index-of('request_passport') is 0
+        return cb null, menu-map.buttons?[name] if (menu-map.buttons?[name] ? "").to-string!.index-of('request_passport') is 0
         return cb null, "goto:#{previous_step}" if menu-map.buttons?[name] is \goto:$previous-step
         return cb null, "goto:#{previous_step}" if menu-map.menu?[name] is \goto:$previous-step
         cb null, "#{current_step}:#{name}"
@@ -366,13 +366,17 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     
     get-text = (message, cb)->
         return get-telegram-passport-text {server-addr, db }, message, cb if message.passport_data?
-        text = 
+        #console.log { message.photo }
+        get-last = (message)->
+            length = message.photo.length
+            message.photo[length - 1]
+        text =
             | message.data? => message.data
             | message.text? => message.text
             | message.contact? => "#{message.contact.phone_number} #{message.contact.first_name} #{message.contact.last_name}"
             | message.location? => "<a href='https://www.google.com/maps/@#{message.location.latitude},#{message.location.longitude},15z'>Место на карте</a>"
             | message.document? => "<a href='#{server-addr}/get-file/#{message.document.file_id}'>Документ</a>"
-            | message.photo?0? => "<a href='#{server-addr}/get-file/#{message.photo.0.file_id}'>Фотография</a>"
+            | message.photo? => "<a href='#{server-addr}/get-file/#{get-last(message).file_id}'>Фотография</a>"
             | message.video? => "<a href='#{server-addr}/get-file/#{message.video.file_id}'>Видео</a>"
             | message.voice? => "<a href='#{server-addr}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
             | _ => message.text
@@ -457,8 +461,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb err if err?
         chat_id = message.message.chat.id
         message_id = message.message.message_id
-        text = "#{message-body.text}\n\nВабрана опция: `#{option}`"
-        err <- edit-message bot, chat_id, message_id, text, {}, {}
+        text = "#{message-body.text}\n\n`#{option}`"
+        err <- edit-message bot, server-addr, chat_id, message_id, text, {}, {}
         cb null
     
     
