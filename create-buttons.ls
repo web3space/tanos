@@ -46,7 +46,7 @@ module.exports = (server-addr, buttons=[], menu=[])->
 
 
 ishash = (hash)->
-    console.log hash
+    #console.log hash
     return (hash ? "").index-of('__') is 0
 unhash = (hash)->
     return hash if not ishash(hash)?

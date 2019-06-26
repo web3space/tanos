@@ -2,7 +2,7 @@ require! {
     \require-ls
     \./send-media.ls
     \./delete-message.ls
-    \prelude-ls : { obj-to-pairs, join }
+    \prelude-ls : { obj-to-pairs, join, keys }
     \./trace.ls
     \express
     \body-parser
@@ -35,7 +35,11 @@ process-validators = ([vaidator, ...rest], text, cb)->
     err <- process-validator validator, text
     return cb err if err?
     process-validators rest, text, cb
-process-text-validators = (step, text, cb)->
+#is-global-menu = (text)->
+#     text.index-of('​') is 0
+process-text-validators = (step, { text, type } , cb)->
+    return cb null if type is \callback_query
+    #return cb null if is-global-menu text
     return cb null if not step.on-text?validate?
     { validate } = step.on-text
     return process-validators validate, text, cb if typeof! validate is \Array
@@ -101,9 +105,17 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | typeof! chat_id is \Number => [chat_id]
         send-each-user chat_ids, current_step, cb
         
-        
     
-    handler-text-user = (chat_id,input-text, cb)->
+    get-localized-text = ($user, text)->
+        return "err: wrong text" if typeof! text isnt \Object
+        return "err: lang-var is missing" if typeof! text.lang-var isnt \String
+        lang = eval text.lang-var
+        return "err: lang is not correct" if typeof! lang isnt \String or lang.length is 0
+        [ head, ...tail ] = keys text 
+        text[lang] ? text[head] ? "text is not declared"
+    
+    handler-text-user = (chat_id, input-text, cb)->
+        #console.log { input-text }
         err, $user <- get-user chat_id
         return cb err if err?
         err, $global <- get-global
@@ -111,7 +123,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         text =
             | typeof! input-text is \Array => input-text |> join \\n
             | typeof! input-text is \String => input-text
-            | _ => "ERR: Unsupported type of text"
+            | typeof! input-text is \Object => get-localized-text $user, input-text
+            | _ => "err: unsupported type of text"
         template = handlebars.compile text
         result = template { $user, $app, $global }
         err <- save-global $global
@@ -200,20 +213,36 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         trace "run command: #{command}"
         run-livescript message, $text, command, cb
         
-    build-command-hash = ({current_step, previous_step, name, menu-map}, cb)->
-        return cb null, "request_location"      if menu-map.buttons?[name] is \request_location
-        return cb null, "request_location"      if menu-map.menu?[name] is \request_location
-        return cb null, "request_contact"       if menu-map.buttons?[name] is \request_contact
-        return cb null, "request_contact"       if menu-map.menu?[name] is \request_contact
-        return cb null, menu-map.buttons?[name] if (menu-map.buttons?[name] ? "").to-string!.index-of('request_passport') is 0
-        return cb null, "goto:#{previous_step}" if menu-map.buttons?[name] is \goto:$previous-step
-        return cb null, "goto:#{previous_step}" if menu-map.menu?[name] is \goto:$previous-step
+    get-request-resource = (type, resource)->  ({ chat_id, menu-map, name }, cb)->
+        return cb null if not menu-map[type]?
+        return cb null, resource if typeof! menu-map[type].lang-var isnt \String and (menu-map[type][name] ? "").to-string!.index-of(resource) is 0
+        return cb null if typeof! menu-map[type].lang-var isnt \String
+        err, $user <- get-user chat_id
+        return cb err if err?
+        lang = eval menu-map[type].lang-var
+        return cb null, resource if (menu-map[type][lang]?[name] ? "").to-string!.index-of(resource) is 0
+        cb null
+    
+    get-request-location = get-request-resource \menu,    \request_location
+    get-request-contact  = get-request-resource \menu,    \request_contact
+    get-request-passport = get-request-resource \buttons, \request_passport
+    
+    build-command-hash = ({chat_id, current_step, previous_step, name, menu-map}, cb)->
+        #console.log \dd, { chat_id, menu-map, name }
+        err, data <- get-request-location { chat_id, menu-map, name }
+        return cb null, data if not err? and data?
+        err, data <- get-request-contact { chat_id, menu-map, name }
+        return cb null, data if not err? and data?
+        err, data <- get-request-passport { chat_id, menu-map, name }
+        return cb null, data if not err? and data?
+        #return cb null, "goto:#{previous_step}" if menu-map.buttons?[name] is \goto:$previous-step
+        #return cb null, "goto:#{previous_step}" if menu-map.menu?[name] is \goto:$previous-step
         cb null, "#{current_step}:#{name}"
     
     generate-commands = ({ chat_id, current_step, previous_step, menu-map } , [button, ...buttons], cb)->
         return cb null, [] if not button?
         [name] = button
-        err, result <- build-command-hash { current_step, previous_step, name, menu-map}
+        err, result <- build-command-hash { chat_id, current_step, previous_step, name, menu-map }
         return cb err if err?
         err, text <- handler-text-user chat_id, name
         return cb err if err?
@@ -233,10 +262,19 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | _ => []
         return merge-images menu-map, cb if result.length is 0
         cb null, result
+    get-localized-buttons = ({ chat_id, buttons }, cb)->
+        return cb null, buttons if typeof! buttons.lang-var isnt \String
+        err, $user <- get-user chat_id
+        lang = eval buttons.lang-var
+        result = buttons[lang] ? {}
+        cb null, result
     get-buttons-generic = (name)->  ({chat_id, current_step, menu-map, previous_step }, cb)->
-        buttons = 
-            menu-map[name] ? {} |> obj-to-pairs
-        err, commands <- generate-commands { chat_id, current_step, previous_step, menu-map }, buttons
+        buttons = menu-map[name] ? {}
+        err, buttons <- get-localized-buttons { chat_id, buttons }
+        return cb err if err?
+        pairs =
+            buttons |> obj-to-pairs
+        err, commands <- generate-commands { chat_id, current_step, previous_step, menu-map }, pairs
         return cb err if err?
         cb null, commands
     
@@ -381,12 +419,45 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | message.voice? => "<a href='#{server-addr}/get-file/#{message.voice.file_id}'>Запись голоса</a>"
             | _ => message.text
         return cb null, text
+    
+    no-buttons = (step)-> not step.buttons? and not step.menu?
+    extract-localized-buttons = ({ message, buttons }, cb)->
+        return cb "message is required" if not message?
+        return cb "buttons object is required" if not buttons?
+        return cb null, buttons if typeof! buttons.lang-var isnt \String
+        err, $user <- get-user-by-message message
+        return cb err if err?
+        lang = eval buttons.lang-var
+        cb null, buttons[lang]    
+        
+    extract-by-button = ({ message, text }, buttons, cb)->
+        err, buttons <- extract-localized-buttons { message, buttons }
+        console.log \extract-by-button, text, err, buttons
+        return cb err if err?
+        name = 
+            | (text ? "").index-of(':') > -1 => text.split(':').1
+            | _ => text
+        res = buttons[name] ? buttons[text]
+        cb null, res
+    extract-button = ({ text, previous-step, message }, cb)->
+        #console.log previous-step
+        button =
+            | not text? => \goto:main
+            | (text ? "").index-of('goto:') > -1 => text
+            | previous-step.on-text? and message.type isnt \callback_query => previous-step.on-text
+            | no-buttons(previous-step) => null
+        console.log \button1, button
+        return cb null, button if button?
+        return extract-by-button { message, text }, previous-step.menu, cb if previous-step.menu?
+        return extract-by-button { message, text }, previous-step.buttons, cb if previous-step.buttons?
+        cb null, null
+        
+        
     on-command = (message, cb)->
         return cb null, no if not message?message?message_id?
         err, previous_step <- get-previous-step message
         
         return cb err, no if err?
-        
         err, text <- get-text message
         return cb err if err?
         
@@ -395,18 +466,11 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, previous-step-guess <- get "#{previous_step}:bot-step"
         previous-step = previous-step-guess ? main-step
         #console.log \BEFORE_VALIDATION, text, message.from
-        err <- process-text-validators previous-step, message.text
+        err <- process-text-validators previous-step, message
         return prevent-action { bot, chat: message.from, text: "Ожидается другое значение c маской #{err}" }, cb if err?
         #console.log \OKKK_VALIDATION, text, message.from
-        clicked-button =
-            | not text? => \goto:main
-            | (text ? "").index-of('goto:') > -1 => text
-            | (text ? "").index-of(':') > -1 and previous-step.buttons?[text.split(':').1]? => previous-step.buttons[text.split(':').1]
-            | (text ? "").index-of(':') > -1 and previous-step.menu?[text.split(':').1]? => previous-step.menu[text.split(':').1]
-            | previous-step.buttons?[text]? => previous-step.buttons[text]
-            | previous-step.menu?[text]? => previous-step.menu[text]
-            | previous-step.on-text? and message.type isnt \callback_query => previous-step.on-text
-            | _ => null
+        err, clicked-button <- extract-button { text, previous-step, message }
+        return cb err if err?
         return on-command {data: "main:#{message.text}", ...message }, cb if message.text? and not message.data? and clicked-button is null and previous_step isnt \main
         
         clicked-button = clicked-button ? \goto:main
