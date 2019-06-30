@@ -43,7 +43,7 @@ where
 
 
 
-### layout.json (KYC bot Example)
+### Create layout.json (KYC bot Example)
 
 ```JSON
 {
