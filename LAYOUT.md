@@ -48,6 +48,28 @@ console.log($user.lang); //=> en
 
 ```
 
+
+## Images
+
+### Single Image
+
+```JSON
+{
+    "images": "https://.....com/image.png"
+}
+```
+
+### Few Images
+
+```JSON
+{
+    "images": ["https://.....com/image.png", "https://.....com/image2.png"]
+}
+```
+
+
+
+
 ## BUTTONS
 
 ### Just buttons
