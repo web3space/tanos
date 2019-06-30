@@ -1,8 +1,6 @@
 
 ![Tanos](https://res.cloudinary.com/nixar-work/image/upload/v1561861499/Screen_Shot_2019-06-30_at_05.24.28.png)
 
-# Tanos 
-
 ### Telegram Bot Builder Framwork
 
 
