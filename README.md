@@ -108,14 +108,14 @@ where
 
 ```
 
-This configuration supports images, text, buttons, menu, text validators, localization. More information are available [here](LAYOUT.md)
+This configuration supports images, text, buttons, menu, text validators, localization. More information is available [here](LAYOUT.md)
 
 
 ### app.js
 
 ```Javascript 
 
-module.exports = ({ db, bot, tanos })=>
+module.exports = ({ db, bot, tanos })=> {
     
     const review = ($user, cb)=> {
         // Some actions with $user data
@@ -123,6 +123,7 @@ module.exports = ({ db, bot, tanos })=>
     }
     
     return { review }
+}
 
 ```
 
