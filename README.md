@@ -108,7 +108,7 @@ where
 
 ```
 
-This configuration supports images, text, buttons, menu, text validators, localization. More information are available [here](Layout.md)
+This configuration supports images, text, buttons, menu, text validators, localization. More information are available [here](LAYOUT.md)
 
 
 ### app.js
