@@ -4,7 +4,7 @@
 
 ```JSON
 {
-    text: "Could be line here"
+    "text": "Could be line here"
 }
 ```
 
@@ -12,7 +12,7 @@
 
 ```JSON
 {
-    text: "Could be variable here {{$user.value}}"
+    "text": "Could be variable here {{$user.value}}"
 }
 ```
 
@@ -20,7 +20,7 @@
 
 ```JSON
 {
-    text: ["Could be", "Few lines"]
+    "text": ["Could be", "Few lines"]
 }
 ```
 
@@ -29,11 +29,11 @@
 
 ```JSON
 {
-    text: {
-       ru: "...",
-       en: "...",
-       ua: "...",
-       langVar: "$user.lang"
+    "text": {
+       "ru": "...",
+       "en": "...",
+       "ua": "...",
+       "langVar": "$user.lang"
     }
 }
 ```
