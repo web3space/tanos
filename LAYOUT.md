@@ -80,7 +80,19 @@ Available variables: `$user`,`$global`
 
 ### Localized buttons
 
-No Documentation yet
+```JSON
+{
+    "buttons": {
+        "button" : {
+            "ru": "buttonRUtext": { goto, store }
+            "en": "buttonENtext": { goto, store }
+            "ua": "buttonUAtext": { goto, store }
+            "langVar": "$user.lang"
+        }
+    }
+}
+```
+
 
 ## MENU
 
@@ -115,9 +127,18 @@ Available variables: `$user`,`$global`
 
 ### Localized menu
 
-No Documentation yet
-
-
+```JSON
+{
+    "menu": {
+        "button" : {
+            "ru": "buttonRUtext": { goto, store }
+            "en": "buttonENtext": { goto, store }
+            "ua": "buttonUAtext": { goto, store }
+            "langVar": "$user.lang"
+        }
+    }
+}
+```
 
 ## CONDITIONS
 
@@ -127,6 +148,7 @@ No Documentation yet
 ```JSON
 {
     "onText": {
+        "validate": ["^[a-z]+[@][a-z]+$"]
         "store": "$user.firstname = $text"
     }
 }
@@ -136,6 +158,7 @@ Use Livescript syntax inside `store`
 
 Available variables: `$user`,`$global`, `$text` 
 
+`validate` field contains the array of regexp validations
 
 
 ### redirectCondition
@@ -147,7 +170,7 @@ Available variables: `$user`,`$global`, `$text`
     }
 }
 ```
-redirectCondition condition is object where 
+`redirectCondition` is object where 
 
 * keys are conditions
 * values are step names
