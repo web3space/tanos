@@ -106,7 +106,7 @@ Available variables: `$user`,`$global`
 {
     "buttons": {
         "button" : {
-            "ru": { "buttonRUtext": { "goto" : "...", "store": "..." } },
+            "ru": {"buttonRUtext": { "goto" : "...", "store": "..." } },
             "en": {"buttonENtext": { "goto" : "...", "store": "..." } },
             "ua": {"buttonUAtext": { "goto" : "...", "store": "..." } },
             "langVar": "$user.lang"
@@ -153,7 +153,7 @@ Available variables: `$user`,`$global`
 {
     "menu": {
         "button" : {
-            "ru": { "buttonRUtext": { "goto" : "...", "store": "..." } },
+            "ru": {"buttonRUtext": { "goto" : "...", "store": "..." } },
             "en": {"buttonENtext": { "goto" : "...", "store": "..." } },
             "ua": {"buttonUAtext": { "goto" : "...", "store": "..." } },
             "langVar": "$user.lang"
