@@ -3,7 +3,7 @@
 ### Telegram Bot Builder Framwork
 
 
-### Install
+## Install
 
 sh
 ```
@@ -16,11 +16,9 @@ Services:
   * Telegram Service
 
 
-### Get Started
+## Get Started
 
-Create config.json
-
-config.json
+### Create config.json
 
 ```JSON
 {
@@ -44,7 +42,7 @@ where
 
 
 
-### layout.ls (KYC bot Example)
+### layout.json (KYC bot Example)
 
 ```JSON
 {
@@ -111,7 +109,7 @@ where
 This configuration supports images, text, buttons, menu, text validators, localization. More information is available [here](LAYOUT.md)
 
 
-### app.js
+### Create app.js
 
 ```Javascript 
 
@@ -128,7 +126,7 @@ module.exports = ({ db, bot, tanos })=> {
 ```
 
 
-Create server.js
+### Create server.js
 
 ```Javascript
 
