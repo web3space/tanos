@@ -1,5 +1,5 @@
 
-![Tanos](https://res.cloudinary.com/nixar-work/image/upload/v1561861499/Screen_Shot_2019-06-30_at_05.24.28.png)
+![Tanos](https://res.cloudinary.com/nixar-work/image/upload/v1561861668/Screen_Shot_2019-06-30_at_05.27.40.png)
 
 ### Telegram Bot Builder Framwork
 
