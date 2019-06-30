@@ -97,7 +97,7 @@ where
       }
    },
    "finish:bot-step":{
-      "onEnter":"({ user, $app }, cb)-> $app.review $user, cb",
+      "onEnter":"({ $user, $app }, cb)-> $app.review $user, cb",
       "text":"Your application has been sent. Please wait for review",
       "buttons":{
          "Pass KYC Verification again":"goto:kyc"
