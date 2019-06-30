@@ -170,7 +170,7 @@ Available variables: `$user`,`$global`
 ```JSON
 {
     "onText": {
-        "validate": ["^[a-z]+[@][a-z]+$"]
+        "validate": ["^[a-z]+[@][a-z]+$"],
         "store": "$user.firstname = $text"
     }
 }
