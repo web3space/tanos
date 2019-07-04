@@ -24,26 +24,30 @@ require! {
 }
 
 
-
-
-process-validator = (validator, text, cb)->
-    return cb "text is required" if typeof! text isnt \String
-    return cb validator if not text.match(new RegExp(validator))?
+validate-attachment = (text, validate-error, cb)->
+    res = (text ? "").index-of('get-file') > -1
+    cb(validate-error ? "Expected Attachment") if res isnt yes
     cb null
-process-validators = ([vaidator, ...rest], text, cb)->
+
+process-validator = (validator, validate-error, text, cb)->
+    return cb "text is required" if typeof! text isnt \String
+    return validate-attachment text, validate-error, cb if validator is \attachment
+    return cb(validate-error ? "Expected #{validator}") if not text.match(new RegExp(validator))?
+    cb null
+process-validators = ([vaidator, ...rest], validate-error, text, cb)->
     return cb null if not validator?
-    err <- process-validator validator, text
+    err <- process-validator validator, validate-error, text
     return cb err if err?
-    process-validators rest, text, cb
+    process-validators rest, validate-error, text, cb
 #is-global-menu = (text)->
 #     text.index-of('​') is 0
 process-text-validators = (step, { text, type } , cb)->
     return cb null if type is \callback_query
     #return cb null if is-global-menu text
     return cb null if not step.on-text?validate?
-    { validate } = step.on-text
-    return process-validators validate, text, cb if typeof! validate is \Array
-    return process-validator validate, text, cb if typeof! validate is \String
+    { validate, validate-error } = step.on-text
+    return process-validators validate, validate-error, text, cb if typeof! validate is \Array
+    return process-validator validate, validate-error, text, cb if typeof! validate is \String
     cb null
 
 module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port, bot-name }, cb)->
@@ -466,8 +470,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, previous-step-guess <- get "#{previous_step}:bot-step"
         previous-step = previous-step-guess ? main-step
         #console.log \BEFORE_VALIDATION, text, message.from
-        err <- process-text-validators previous-step, message
-        return prevent-action { bot, chat: message.from, text: "Ожидается другое значение c маской #{err}" }, cb if err?
+        err <- process-text-validators previous-step, { text, message.type }
+        return prevent-action { bot, chat: message.from, text: "#{err}" }, cb if err?
         #console.log \OKKK_VALIDATION, text, message.from
         err, clicked-button <- extract-button { text, previous-step, message }
         return cb err if err?
