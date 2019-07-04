@@ -51,7 +51,9 @@ process-text-validators = (step, { text, type } , cb)->
     cb null
 
 module.exports = ({ telegram-token, app,layout, db-type, server-address, server-port, server-ssl-port, bot-name }, cb)->
-    server-addr = "#{server-address}:#{server-ssl-port ? server-port}"
+    server-addr =
+        | server-ssl-port? => "#{server-address.replace(/^http/, 'https')}:#{server-ssl-port}"
+        | _ => "#{server-address}:#{server-port}"
     tanos = {}
     bot = make-bot telegram-token
     tanos.bot = bot
