@@ -282,8 +282,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb err if err?
         cb null, commands
     
-    get-buttons = get-buttons-generic \buttons
     get-menu = get-buttons-generic \menu
+    get-buttons = get-buttons-generic \buttons
+    
     
     get-previous-step-key = (message)->
         "#{message.from.id}:previous-step"
@@ -322,8 +323,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         process-conditions conditions, message, cb
     
     check-show-next = (current-step, message, cb)->
-        return cb null if typeof! current-step?show-next isnt \String
-        cb null, current-step?show-next
+        return cb null if typeof! current-step?goto isnt \String
+        cb null, current-step?goto
     
     check-regirect-conditions = (current-step, message, cb)->
         return cb null if not current-step?redirect-condition?
@@ -368,9 +369,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err <- execute-on-enter menu-map, message
         return cb err, no if err?
         chat_id = message.from.id
-        err, buttons <- get-buttons { chat_id, current_step, menu-map, previous_step }
+        err, menu-guess <- get-menu { chat_id, current_step, menu-map, previous_step }
         return cb err, no if err?
-        err, menu <- get-menu { chat_id, current_step, menu-map, previous_step }
+        err, buttons <- get-buttons { chat_id, current_step, menu-map, previous_step }
         return cb err, no if err?
         err, images <- get-images menu-map
         return cb err, no if err?
@@ -382,6 +383,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         chat = message.from
         err, text <- handler-text-user chat_id, menu-map.text
         return cb err, no if err?
+        menu = 
+            | buttons? => null
+            | _ => menu-guess
         message-body = { bot, chat, photo, buttons, text, menu, server-addr }
         err, next-message <- send-media message-body
         return cb err, no if err?
@@ -462,18 +466,21 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | no-buttons(previous-step) => null
         return cb null, button if button?
         
-        err, button <- extract-by-button { message, text }, previous-step.menu
-        return cb null, button if button?
+        
         
         err, button <- extract-by-button { message, text }, previous-step.buttons
         return cb null, button if button?
         # button not found in current step, so will try to find in main step
         
-        err, button <- extract-by-button { message, text }, main-step.menu
+        err, button <- extract-by-button { message, text }, previous-step.menu
         return cb null, button if button?
         
         err, button <- extract-by-button { message, text }, main-step.buttons
         return cb null, button if button?
+        
+        err, button <- extract-by-button { message, text }, main-step.menu
+        return cb null, button if button?
+        
         
         cb null, null
         

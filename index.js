@@ -91,7 +91,7 @@
     bot = makeBot(telegramToken);
     tanos.bot = bot;
     return makeDbManager(layout, dbType, function(err, db){
-      var get, put, del, $app, defaultUser, getUser, saveUser, saveGlobal, getGlobal, sendEachUser, getLocalizedText, handlerTextUser, runCommands, saveStoreItems, saveStore, getChatId, getUserByMessage, runJavascript, runFunction, runLivescript, runCommand, getRequestResource, getRequestLocation, getRequestContact, getRequestPassport, buildCommandHash, generateCommands, onStart, getImages, getLocalizedButtons, getButtonsGeneric, getButtons, getMenu, getPreviousStepKey, gotoAll, deleteMessageIfExists, processCondition, processConditions, checkShowNext, checkRegirectConditions, unvarStep, executeOnEnter, goto, getPreviousStep, preventAction, getText, noButtons, extractLocalizedButtons, extractByButton, extractButton, onCommand, handlers, handlerKeys, storeUsername, processHandlers, processMesssage, updatePreviousMesssage, getFromId, processHttpMessage, restify, proxyFile, startWithSsl, startWithoutSsl, start;
+      var get, put, del, $app, defaultUser, getUser, saveUser, saveGlobal, getGlobal, sendEachUser, getLocalizedText, handlerTextUser, runCommands, saveStoreItems, saveStore, getChatId, getUserByMessage, runJavascript, runFunction, runLivescript, runCommand, getRequestResource, getRequestLocation, getRequestContact, getRequestPassport, buildCommandHash, generateCommands, onStart, getImages, getLocalizedButtons, getButtonsGeneric, getMenu, getButtons, getPreviousStepKey, gotoAll, deleteMessageIfExists, processCondition, processConditions, checkShowNext, checkRegirectConditions, unvarStep, executeOnEnter, goto, getPreviousStep, preventAction, getText, noButtons, extractLocalizedButtons, extractByButton, extractButton, onCommand, handlers, handlerKeys, storeUsername, processHandlers, processMesssage, updatePreviousMesssage, getFromId, processHttpMessage, restify, proxyFile, startWithSsl, startWithoutSsl, start;
       if (err != null) {
         return cb(err);
       }
@@ -568,8 +568,8 @@
           });
         };
       };
-      getButtons = getButtonsGeneric('buttons');
       getMenu = getButtonsGeneric('menu');
+      getButtons = getButtonsGeneric('buttons');
       getPreviousStepKey = function(message){
         return message.from.id + ":previous-step";
       };
@@ -649,10 +649,10 @@
         });
       };
       checkShowNext = function(currentStep, message, cb){
-        if (toString$.call(currentStep != null ? currentStep.showNext : void 8).slice(8, -1) !== 'String') {
+        if (toString$.call(currentStep != null ? currentStep.goto : void 8).slice(8, -1) !== 'String') {
           return cb(null);
         }
-        return cb(null, currentStep != null ? currentStep.showNext : void 8);
+        return cb(null, currentStep != null ? currentStep.goto : void 8);
       };
       checkRegirectConditions = function(currentStep, message, cb){
         var redirectConditions;
@@ -698,6 +698,7 @@
         });
       };
       goto = function(current_step_guess, message, cb){
+        console.log('goto', current_step_guess);
         return unvarStep(current_step_guess, message, function(err, current_step){
           if (err != null) {
             return cb(err, false);
@@ -736,21 +737,21 @@
                         return cb(err, false);
                       }
                       chat_id = message.from.id;
-                      return getButtons({
+                      return getMenu({
                         chat_id: chat_id,
                         current_step: current_step,
                         menuMap: menuMap,
                         previous_step: previous_step
-                      }, function(err, buttons){
+                      }, function(err, menuGuess){
                         if (err != null) {
                           return cb(err, false);
                         }
-                        return getMenu({
+                        return getButtons({
                           chat_id: chat_id,
                           current_step: current_step,
                           menuMap: menuMap,
                           previous_step: previous_step
-                        }, function(err, menu){
+                        }, function(err, buttons){
                           if (err != null) {
                             return cb(err, false);
                           }
@@ -773,10 +774,18 @@
                             }());
                             chat = message.from;
                             return handlerTextUser(chat_id, menuMap.text, function(err, text){
-                              var messageBody;
+                              var menu, messageBody;
                               if (err != null) {
                                 return cb(err, false);
                               }
+                              menu = (function(){
+                                switch (false) {
+                                case buttons == null:
+                                  return null;
+                                default:
+                                  return menuGuess;
+                                }
+                              }());
                               messageBody = {
                                 bot: bot,
                                 chat: chat,
@@ -935,6 +944,9 @@
       extractByButton = function(arg$, buttons, cb){
         var message, text;
         message = arg$.message, text = arg$.text;
+        if (buttons == null) {
+          return cb("buttons not found");
+        }
         return extractLocalizedButtons({
           message: message,
           buttons: buttons
@@ -961,8 +973,9 @@
         });
       };
       extractButton = function(arg$, cb){
-        var text, previousStep, message, button;
-        text = arg$.text, previousStep = arg$.previousStep, message = arg$.message;
+        var text, previousStep, mainStep, message, button;
+        text = arg$.text, previousStep = arg$.previousStep, mainStep = arg$.mainStep, message = arg$.message;
+        console.log('extract-button', text);
         if (previousStep == null) {
           return cb("previous-step is required");
         }
@@ -981,19 +994,39 @@
         if (button != null) {
           return cb(null, button);
         }
-        if (previousStep.menu != null) {
+        return extractByButton({
+          message: message,
+          text: text
+        }, previousStep.buttons, function(err, button){
+          if (button != null) {
+            return cb(null, button);
+          }
           return extractByButton({
             message: message,
             text: text
-          }, previousStep.menu, cb);
-        }
-        if (previousStep.buttons != null) {
-          return extractByButton({
-            message: message,
-            text: text
-          }, previousStep.buttons, cb);
-        }
-        return cb(null, null);
+          }, previousStep.menu, function(err, button){
+            if (button != null) {
+              return cb(null, button);
+            }
+            return extractByButton({
+              message: message,
+              text: text
+            }, mainStep.buttons, function(err, button){
+              if (button != null) {
+                return cb(null, button);
+              }
+              return extractByButton({
+                message: message,
+                text: text
+              }, mainStep.menu, function(err, button){
+                if (button != null) {
+                  return cb(null, button);
+                }
+                return cb(null, null);
+              });
+            });
+          });
+        });
       };
       onCommand = function(message, cb){
         var ref$;
@@ -1034,12 +1067,14 @@
                   return extractButton({
                     text: text,
                     previousStep: previousStep,
+                    mainStep: mainStep,
                     message: message
                   }, function(err, clickedButton){
                     var buttonNotFound, commands;
+                    console.log(clickedButton);
                     buttonNotFound = message.text != null && message.data == null && clickedButton === null && previous_step !== 'main';
                     if (buttonNotFound) {
-                      console.log('button-not-found', message.text);
+                      console.log('!!!BUTTON-NOT-FOUND', message.text);
                     }
                     if (buttonNotFound) {
                       return onCommand((import$({
@@ -1075,7 +1110,6 @@
                       }());
                       currentSteps = current_step.split(',');
                       return gotoAll(currentSteps, message, function(err, success){
-                        console.log('goto-all', err, success);
                         return cb(err, success);
                       });
                     });
@@ -1119,7 +1153,6 @@
             if (err != null) {
               return cb(err, false);
             }
-            console.log('result', result);
             if (result) {
               return cb(null, true);
             }
