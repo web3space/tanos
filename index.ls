@@ -348,6 +348,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb err if err?
         cb null
     goto = (current_step_guess, message, cb)->
+        console.log \goto, current_step_guess
         err, current_step <- unvar-step current_step_guess, message
         return cb err, no if err?
         err, previous_step <- get-previous-step message
@@ -441,6 +442,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         cb null, buttons[lang]    
     
     extract-by-button = ({ message, text }, buttons, cb)->
+        return cb "buttons not found" if not buttons?
         err, buttons <- extract-localized-buttons { message, buttons }
 
         return cb err if err?
@@ -450,7 +452,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | _ => text
         res = buttons[name] ? buttons[text]
         cb null, res
-    extract-button = ({ text, previous-step, message }, cb)->
+    extract-button = ({ text, previous-step, main-step,  message }, cb)->
+        console.log \extract-button, text
         return cb "previous-step is required" if not previous-step?
         button =
             | not text? => \goto:main
@@ -458,8 +461,20 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | previous-step.on-text? and message.type isnt \callback_query => previous-step.on-text
             | no-buttons(previous-step) => null
         return cb null, button if button?
-        return extract-by-button { message, text }, previous-step.menu, cb if previous-step.menu?
-        return extract-by-button { message, text }, previous-step.buttons, cb if previous-step.buttons?
+        
+        err, button <- extract-by-button { message, text }, previous-step.menu
+        return cb null, button if button?
+        
+        err, button <- extract-by-button { message, text }, previous-step.buttons
+        return cb null, button if button?
+        # button not found in current step, so will try to find in main step
+        
+        err, button <- extract-by-button { message, text }, main-step.menu
+        return cb null, button if button?
+        
+        err, button <- extract-by-button { message, text }, main-step.buttons
+        return cb null, button if button?
+        
         cb null, null
         
         
@@ -478,10 +493,11 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         previous-step = previous-step-guess ? main-step
         err <- process-text-validators previous-step, { text, message.type }
         return prevent-action { bot, chat: message.from, text: "#{err}" }, cb if err?
-        err, clicked-button <- extract-button { text, previous-step, message }
+        err, clicked-button <- extract-button { text, previous-step, main-step, message }
+        console.log clicked-button
         #return cb err if err?
         button-not-found = message.text? and not message.data? and clicked-button is null and previous_step isnt \main
-        console.log \button-not-found, message.text if button-not-found
+        console.log \!!!BUTTON-NOT-FOUND, message.text if button-not-found
         return on-command {data: "main:#{message.text}", ...message }, cb if button-not-found
         
         clicked-button = clicked-button ? \goto:main
@@ -496,9 +512,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
                 | typeof! clicked-button is \Object => clicked-button.goto ? \main
                 | _ => \main
         current-steps = current_step.split(',')
-        
+        #return cb null, yes if current-steps.length is 0
+        #console.log { current-steps }
         err, success <- goto-all current-steps, message
-        console.log \goto-all, err, success
         cb err, success
     
     handlers =  { on-command, on-start }
@@ -518,7 +534,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         { message_id } = message.message
         err, result <- handlers[handler] message
         return cb err, no if err?
-        console.log \result, result
         return cb null, yes if result
         err, result <- process-handlers rest, message
         cb err, result
