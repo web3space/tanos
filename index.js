@@ -27,7 +27,7 @@
     var res;
     res = (text != null ? text : "").indexOf('get-file') > -1;
     if (res !== true) {
-      cb(validateError != null ? validateError : "Expected Attachment");
+      return cb(validateError != null ? validateError : "Expected Attachment");
     }
     return cb(null);
   };
@@ -91,7 +91,7 @@
     bot = makeBot(telegramToken);
     tanos.bot = bot;
     return makeDbManager(layout, dbType, function(err, db){
-      var get, put, del, $app, defaultUser, getUser, saveUser, saveGlobal, getGlobal, sendEachUser, getLocalizedText, handlerTextUser, runCommands, saveStoreItems, saveStore, getChatId, getUserByMessage, runJavascript, runFunction, runLivescript, runCommand, getRequestResource, getRequestLocation, getRequestContact, getRequestPassport, buildCommandHash, generateCommands, onStart, getImages, getLocalizedButtons, getButtonsGeneric, getButtons, getMenu, getPreviousStepKey, gotoAll, deleteMessageIfExists, processCondition, processConditions, checkRegirectConditions, unvarStep, executeOnEnter, goto, getPreviousStep, preventAction, getText, noButtons, extractLocalizedButtons, extractByButton, extractButton, onCommand, handlers, handlerKeys, storeUsername, processHandlers, processMesssage, updatePreviousMesssage, getFromId, processHttpMessage, restify, proxyFile, startWithSsl, startWithoutSsl, start;
+      var get, put, del, $app, defaultUser, getUser, saveUser, saveGlobal, getGlobal, sendEachUser, getLocalizedText, handlerTextUser, runCommands, saveStoreItems, saveStore, getChatId, getUserByMessage, runJavascript, runFunction, runLivescript, runCommand, getRequestResource, getRequestLocation, getRequestContact, getRequestPassport, buildCommandHash, generateCommands, onStart, getImages, getLocalizedButtons, getButtonsGeneric, getButtons, getMenu, getPreviousStepKey, gotoAll, deleteMessageIfExists, processCondition, processConditions, checkShowNext, checkRegirectConditions, unvarStep, executeOnEnter, goto, getPreviousStep, preventAction, getText, noButtons, extractLocalizedButtons, extractByButton, extractButton, onCommand, handlers, handlerKeys, storeUsername, processHandlers, processMesssage, updatePreviousMesssage, getFromId, processHttpMessage, restify, proxyFile, startWithSsl, startWithoutSsl, start;
       if (err != null) {
         return cb(err);
       }
@@ -385,7 +385,7 @@
       };
       runLivescript = function(message, $text, command, cb){
         var javascript;
-        if (command.indexOf('->') > -1) {
+        if (command.indexOf(')->') > -1) {
           return runFunction(message, $text, command, cb);
         }
         javascript = livescript.compile(command, {
@@ -500,8 +500,9 @@
       };
       onStart = function(message, cb){
         return onCommand({
-          text: '',
-          from: message.chat
+          text: '/start',
+          from: message.chat,
+          type: "message"
         }, cb);
       };
       getImages = function(menuMap, cb){
@@ -576,11 +577,11 @@
         var current_step, steps;
         current_step = arg$[0], steps = slice$.call(arg$, 1);
         if (current_step == null) {
-          return cb(null);
+          return cb(null, true);
         }
-        return goto(current_step, message, function(err){
+        return goto(current_step, message, function(err, success){
           if (err != null) {
-            return cb(err);
+            return cb(err, success);
           }
           return gotoAll(steps, message, cb);
         });
@@ -647,6 +648,12 @@
           return processConditions(conditions, message, cb);
         });
       };
+      checkShowNext = function(currentStep, message, cb){
+        if (toString$.call(currentStep != null ? currentStep.showNext : void 8).slice(8, -1) !== 'String') {
+          return cb(null);
+        }
+        return cb(null, currentStep != null ? currentStep.showNext : void 8);
+      };
       checkRegirectConditions = function(currentStep, message, cb){
         var redirectConditions;
         if ((currentStep != null ? currentStep.redirectCondition : void 8) == null) {
@@ -693,40 +700,40 @@
       goto = function(current_step_guess, message, cb){
         return unvarStep(current_step_guess, message, function(err, current_step){
           if (err != null) {
-            return cb(err);
+            return cb(err, false);
           }
           return getPreviousStep(message, function(err, previous_step){
             var previousStepKey, nameMenu;
             if (err != null) {
-              return cb(err);
+              return cb(err, false);
             }
             previousStepKey = getPreviousStepKey(message);
             nameMenu = current_step + ":bot-step";
             return put(previousStepKey, current_step, function(err){
               if (err != null) {
-                return cb(err);
+                return cb(err, false);
               }
               return get(current_step + ":bot-step", function(err, currentMap){
                 return checkRegirectConditions(currentMap, message, function(err, regirect_step){
                   if (err != null) {
-                    return cb(err);
+                    return cb(err, false);
                   }
                   if (regirect_step != null) {
                     return goto(regirect_step, message, cb);
                   }
                   if (err != null) {
-                    return cb(err);
+                    return cb(err, false);
                   }
                   return get("main:bot-step", function(err, mainMap){
                     var menuMap;
                     if (err != null) {
-                      return cb(err);
+                      return cb(err, false);
                     }
                     menuMap = currentMap != null ? currentMap : mainMap;
                     return executeOnEnter(menuMap, message, function(err){
                       var chat_id;
                       if (err != null) {
-                        return cb(err);
+                        return cb(err, false);
                       }
                       chat_id = message.from.id;
                       return getButtons({
@@ -736,7 +743,7 @@
                         previous_step: previous_step
                       }, function(err, buttons){
                         if (err != null) {
-                          return cb(err);
+                          return cb(err, false);
                         }
                         return getMenu({
                           chat_id: chat_id,
@@ -745,12 +752,12 @@
                           previous_step: previous_step
                         }, function(err, menu){
                           if (err != null) {
-                            return cb(err);
+                            return cb(err, false);
                           }
                           return getImages(menuMap, function(err, images){
                             var photo, chat;
                             if (err != null) {
-                              return cb(err);
+                              return cb(err, false);
                             }
                             photo = (function(){
                               switch (false) {
@@ -768,7 +775,7 @@
                             return handlerTextUser(chat_id, menuMap.text, function(err, text){
                               var messageBody;
                               if (err != null) {
-                                return cb(err);
+                                return cb(err, false);
                               }
                               messageBody = {
                                 bot: bot,
@@ -787,7 +794,7 @@
                                   current_step: current_step
                                 }, messageBody)), function(err){
                                   if (err != null) {
-                                    return cb(err);
+                                    return cb(err, false);
                                   }
                                   return get("${chat_id}." + current_step, function(err, message_id){
                                     return deleteMessageIfExists({
@@ -796,9 +803,18 @@
                                     }, function(){
                                       return put("${chat_id}." + current_step, nextMessage.message_id, function(err){
                                         if (err != null) {
-                                          return cb(err);
+                                          return cb(err, false);
                                         }
-                                        return cb(null, true);
+                                        return checkShowNext(currentMap, message, function(err, show_next){
+                                          if (show_next != null) {
+                                            return goto(show_next, message, cb);
+                                          }
+                                          if (err != null) {
+                                            return cb(err, false);
+                                          }
+                                          console.log('YES');
+                                          return cb(null, true);
+                                        });
                                       });
                                     });
                                   });
@@ -901,7 +917,7 @@
         if (message == null) {
           return cb("message is required");
         }
-        if (buttons == null) {
+        if (toString$.call(buttons).slice(8, -1) !== 'Object') {
           return cb("buttons object is required");
         }
         if (toString$.call(buttons.langVar).slice(8, -1) !== 'String') {
@@ -924,9 +940,11 @@
           buttons: buttons
         }, function(err, buttons){
           var name, res, ref$;
-          console.log('extract-by-button', text, err, buttons);
           if (err != null) {
             return cb(err);
+          }
+          if (buttons == null) {
+            return cb("buttons not found");
           }
           name = (function(){
             switch (false) {
@@ -945,6 +963,9 @@
       extractButton = function(arg$, cb){
         var text, previousStep, message, button;
         text = arg$.text, previousStep = arg$.previousStep, message = arg$.message;
+        if (previousStep == null) {
+          return cb("previous-step is required");
+        }
         button = (function(){
           switch (false) {
           case text != null:
@@ -957,7 +978,6 @@
             return null;
           }
         }());
-        console.log('button1', button);
         if (button != null) {
           return cb(null, button);
         }
@@ -977,6 +997,11 @@
       };
       onCommand = function(message, cb){
         var ref$;
+        console.log('on-command', {
+          type: message.type,
+          data: message.data,
+          text: message.text
+        });
         if ((message != null ? (ref$ = message.message) != null ? ref$.message_id : void 8 : void 8) == null) {
           return cb(null, false);
         }
@@ -1011,11 +1036,12 @@
                     previousStep: previousStep,
                     message: message
                   }, function(err, clickedButton){
-                    var commands;
-                    if (err != null) {
-                      return cb(err);
+                    var buttonNotFound, commands;
+                    buttonNotFound = message.text != null && message.data == null && clickedButton === null && previous_step !== 'main';
+                    if (buttonNotFound) {
+                      console.log('button-not-found', message.text);
                     }
-                    if (message.text != null && message.data == null && clickedButton === null && previous_step !== 'main') {
+                    if (buttonNotFound) {
                       return onCommand((import$({
                         data: "main:" + message.text
                       }, message)), cb);
@@ -1034,7 +1060,7 @@
                     return runCommands(message, text, commands, function(err){
                       var current_step, currentSteps;
                       if (err != null) {
-                        return cb(err);
+                        return cb(err, false);
                       }
                       current_step = (function(){
                         var ref$;
@@ -1048,7 +1074,10 @@
                         }
                       }());
                       currentSteps = current_step.split(',');
-                      return gotoAll(currentSteps, message, cb);
+                      return gotoAll(currentSteps, message, function(err, success){
+                        console.log('goto-all', err, success);
+                        return cb(err, success);
+                      });
                     });
                   });
                 });
@@ -1090,6 +1119,7 @@
             if (err != null) {
               return cb(err, false);
             }
+            console.log('result', result);
             if (result) {
               return cb(null, true);
             }

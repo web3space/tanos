@@ -26,7 +26,7 @@ require! {
 
 validate-attachment = (text, validate-error, cb)->
     res = (text ? "").index-of('get-file') > -1
-    cb(validate-error ? "Expected Attachment") if res isnt yes
+    return cb(validate-error ? "Expected Attachment") if res isnt yes
     cb null
 
 process-validator = (validator, validate-error, text, cb)->
@@ -121,7 +121,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         text[lang] ? text[head] ? "text is not declared"
     
     handler-text-user = (chat_id, input-text, cb)->
-        #console.log { input-text }
         err, $user <- get-user chat_id
         return cb err if err?
         err, $global <- get-global
@@ -211,7 +210,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         cb null
     
     run-livescript = (message, $text, command, cb)->
-        return run-function message, $text, command, cb if command.index-of('->') > -1
+        return run-function message, $text, command, cb if command.index-of(')->') > -1
         javascript = livescript.compile command, { bare: yes }
         run-javascript message, $text, javascript, cb
         
@@ -234,7 +233,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     get-request-passport = get-request-resource \buttons, \request_passport
     
     build-command-hash = ({chat_id, current_step, previous_step, name, menu-map}, cb)->
-        #console.log \dd, { chat_id, menu-map, name }
         err, data <- get-request-location { chat_id, menu-map, name }
         return cb null, data if not err? and data?
         err, data <- get-request-contact { chat_id, menu-map, name }
@@ -259,7 +257,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         cb null, all
     
     on-start = (message, cb)->
-        on-command { text: '' , from: message.chat }, cb
+        on-command { text: '/start' , from: message.chat, type: "message" }, cb
     
     get-images = (menu-map, cb)->
         result =
@@ -291,9 +289,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         "#{message.from.id}:previous-step"
     
     goto-all = ([current_step, ...steps], message, cb)->
-        return cb null if not current_step?
-        err <- goto current_step, message
-        return cb err if err?
+        return cb null, yes if not current_step?
+        err, success <- goto current_step, message
+        return cb err, success if err?
         goto-all steps, message, cb
     
     delete-message-if-exists = ({ chat_id, message_id }, cb)->
@@ -323,6 +321,10 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb null, condition.1 if data is yes
         process-conditions conditions, message, cb
     
+    check-show-next = (current-step, message, cb)->
+        return cb null if typeof! current-step?show-next isnt \String
+        cb null, current-step?show-next
+    
     check-regirect-conditions = (current-step, message, cb)->
         return cb null if not current-step?redirect-condition?
         return cb "redirect condition should be an object" if typeof! current-step?redirect-condition isnt \Object
@@ -347,30 +349,30 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         cb null
     goto = (current_step_guess, message, cb)->
         err, current_step <- unvar-step current_step_guess, message
-        return cb err if err?
+        return cb err, no if err?
         err, previous_step <- get-previous-step message
-        return cb err if err?
+        return cb err, no if err?
         previous-step-key = get-previous-step-key message
         name-menu = "#{current_step}:bot-step"
         err <- put previous-step-key, current_step
-        return cb err if err?
+        return cb err, no if err?
         err, current-map <- get "#{current_step}:bot-step"
         err, regirect_step <- check-regirect-conditions current-map, message
-        return cb err if err?
+        return cb err, no if err?
         return goto regirect_step, message, cb if regirect_step?
-        return cb err if err?
+        return cb err, no if err?
         err, main-map <- get "main:bot-step"
-        return cb err if err?
+        return cb err, no if err?
         menu-map = current-map ? main-map
         err <- execute-on-enter menu-map, message
-        return cb err if err?
+        return cb err, no if err?
         chat_id = message.from.id
         err, buttons <- get-buttons { chat_id, current_step, menu-map, previous_step }
-        return cb err if err?
+        return cb err, no if err?
         err, menu <- get-menu { chat_id, current_step, menu-map, previous_step }
-        return cb err if err?
+        return cb err, no if err?
         err, images <- get-images menu-map
-        return cb err if err?
+        return cb err, no if err?
         photo = 
             | typeof! images is \Undefined => null
             | typeof! images is \Array => images.0
@@ -378,16 +380,20 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             | _ => null
         chat = message.from
         err, text <- handler-text-user chat_id, menu-map.text
-        return cb err if err?
+        return cb err, no if err?
         message-body = { bot, chat, photo, buttons, text, menu, server-addr }
         err, next-message <- send-media message-body
         return cb err, no if err?
         err <- put "#{next-message.message_id}:message", { current_step, ...message-body }
-        return cb err if err?
+        return cb err, no if err?
         err, message_id <- get "${chat_id}.#{current_step}"
         <- delete-message-if-exists { chat_id, message_id }
         err <- put "${chat_id}.#{current_step}", next-message.message_id
-        return cb err if err?
+        return cb err, no if err?
+        err, show_next <- check-show-next current-map, message
+        return goto show_next, message, cb if show_next?
+        return cb err, no if err?
+        console.log \YES
         cb null, yes
     
     get-previous-step = (message, cb)->
@@ -403,14 +409,12 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         cb null, previous_step
 
     prevent-action = ({ bot, chat, text}, cb)->
-        #console.log \FAILED_VALIDATION, text, chat
         err <- send-media { bot, chat, text, server-addr }
         return cb err, no if err?
         return cb null, yes
     
     get-text = (message, cb)->
         return get-telegram-passport-text {server-addr, db }, message, cb if message.passport_data?
-        #console.log { message.photo }
         get-last = (message)->
             length = message.photo.length
             message.photo[length - 1]
@@ -429,30 +433,30 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     no-buttons = (step)-> not step.buttons? and not step.menu?
     extract-localized-buttons = ({ message, buttons }, cb)->
         return cb "message is required" if not message?
-        return cb "buttons object is required" if not buttons?
+        return cb "buttons object is required" if typeof! buttons isnt \Object
         return cb null, buttons if typeof! buttons.lang-var isnt \String
         err, $user <- get-user-by-message message
         return cb err if err?
         lang = eval buttons.lang-var
         cb null, buttons[lang]    
-        
+    
     extract-by-button = ({ message, text }, buttons, cb)->
         err, buttons <- extract-localized-buttons { message, buttons }
-        console.log \extract-by-button, text, err, buttons
+
         return cb err if err?
+        return cb "buttons not found" if not buttons?
         name = 
             | (text ? "").index-of(':') > -1 => text.split(':').1
             | _ => text
         res = buttons[name] ? buttons[text]
         cb null, res
     extract-button = ({ text, previous-step, message }, cb)->
-        #console.log previous-step
+        return cb "previous-step is required" if not previous-step?
         button =
             | not text? => \goto:main
             | (text ? "").index-of('goto:') > -1 => text
             | previous-step.on-text? and message.type isnt \callback_query => previous-step.on-text
             | no-buttons(previous-step) => null
-        console.log \button1, button
         return cb null, button if button?
         return extract-by-button { message, text }, previous-step.menu, cb if previous-step.menu?
         return extract-by-button { message, text }, previous-step.buttons, cb if previous-step.buttons?
@@ -460,6 +464,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         
         
     on-command = (message, cb)->
+        console.log \on-command, { message.type, message.data, message.text }
         return cb null, no if not message?message?message_id?
         err, previous_step <- get-previous-step message
         
@@ -471,13 +476,13 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb err if err?
         err, previous-step-guess <- get "#{previous_step}:bot-step"
         previous-step = previous-step-guess ? main-step
-        #console.log \BEFORE_VALIDATION, text, message.from
         err <- process-text-validators previous-step, { text, message.type }
         return prevent-action { bot, chat: message.from, text: "#{err}" }, cb if err?
-        #console.log \OKKK_VALIDATION, text, message.from
         err, clicked-button <- extract-button { text, previous-step, message }
-        return cb err if err?
-        return on-command {data: "main:#{message.text}", ...message }, cb if message.text? and not message.data? and clicked-button is null and previous_step isnt \main
+        #return cb err if err?
+        button-not-found = message.text? and not message.data? and clicked-button is null and previous_step isnt \main
+        console.log \button-not-found, message.text if button-not-found
+        return on-command {data: "main:#{message.text}", ...message }, cb if button-not-found
         
         clicked-button = clicked-button ? \goto:main
         commands =
@@ -485,13 +490,16 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
                 | typeof! clicked-button.store is \Array => clicked-button.store
                 | _ => []
         err <- run-commands message, text, commands
-        return cb err if err?
+        return cb err, no if err?
         current_step =
                 | typeof! clicked-button is \String => clicked-button.split(':').1 ? \main
                 | typeof! clicked-button is \Object => clicked-button.goto ? \main
                 | _ => \main
         current-steps = current_step.split(',')
-        goto-all current-steps, message, cb
+        
+        err, success <- goto-all current-steps, message
+        console.log \goto-all, err, success
+        cb err, success
     
     handlers =  { on-command, on-start }
     
@@ -510,6 +518,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         { message_id } = message.message
         err, result <- handlers[handler] message
         return cb err, no if err?
+        console.log \result, result
         return cb null, yes if result
         err, result <- process-handlers rest, message
         cb err, result
@@ -537,7 +546,6 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     
     
     bot.on \update , (result)->
-        #console.log result
         message = result.message ? result.callback_query
         #message.text = unhash message.text if message.text?
         message.data = unhash message.data if message.data?
