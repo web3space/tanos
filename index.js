@@ -780,7 +780,7 @@
                               }
                               menu = (function(){
                                 switch (false) {
-                                case buttons == null:
+                                case !(keys(buttons).length > 0):
                                   return null;
                                 default:
                                   return menuGuess;

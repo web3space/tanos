@@ -384,7 +384,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, text <- handler-text-user chat_id, menu-map.text
         return cb err, no if err?
         menu = 
-            | buttons? => null
+            | keys(buttons).length > 0 => null
             | _ => menu-guess
         message-body = { bot, chat, photo, buttons, text, menu, server-addr }
         err, next-message <- send-media message-body
