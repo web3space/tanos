@@ -124,6 +124,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, $user <- get-user chat_id
         return cb err if err?
         err, $global <- get-global
+        #console.log \$global.admins, $global.admins
         return cb err if err?
         text =
             | typeof! input-text is \Array => input-text |> join \\n
@@ -531,6 +532,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     store-username = (message, cb)->
         return cb null if not message.chat?
         err <- put "#{message.chat.username}:username", message.chat.id
+        return cb err if err?
+        err <- put "#{message.chat.id}:chat_id->username", message.chat.username
         return cb err if err?
         cb null
     process-handlers = ([handler, ...rest], message, cb)->

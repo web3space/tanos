@@ -1133,7 +1133,12 @@
           if (err != null) {
             return cb(err);
           }
-          return cb(null);
+          return put(message.chat.id + ":chat_id->username", message.chat.username, function(err){
+            if (err != null) {
+              return cb(err);
+            }
+            return cb(null);
+          });
         });
       };
       processHandlers = function(arg$, message, cb){
