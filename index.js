@@ -91,7 +91,7 @@
     bot = makeBot(telegramToken);
     tanos.bot = bot;
     return makeDbManager(layout, dbType, function(err, db){
-      var get, put, del, $app, defaultUser, getUser, saveUser, saveGlobal, getGlobal, sendEachUser, getLocalizedText, handlerTextUser, runCommands, saveStoreItems, saveStore, getChatId, getUserByMessage, runJavascript, runFunction, runLivescript, runCommand, getRequestResource, getRequestLocation, getRequestContact, getRequestPassport, buildCommandHash, generateCommands, onStart, getImages, getLocalizedButtons, getButtonsGeneric, getMenu, getButtons, getPreviousStepKey, gotoAll, deleteMessageIfExists, processCondition, processConditions, checkShowNext, checkRegirectConditions, unvarStep, executeOnEnter, goto, getPreviousStep, preventAction, getText, noButtons, extractLocalizedButtons, extractByButton, extractButton, onCommand, handlers, handlerKeys, storeUsername, processHandlers, processMesssage, updatePreviousMesssage, getFromId, processHttpMessage, restify, proxyFile, startWithSsl, startWithoutSsl, start;
+      var get, put, del, $app, defaultUser, getUser, saveUser, saveGlobal, getGlobal, sendEachUser, getLocalizedText, handlerTextUser, runCommands, saveStoreItems, saveStore, getChatId, getUserByMessage, runJavascript, runFunction, runLivescript, runCommand, getRequestResource, getRequestLocation, getRequestContact, getRequestPassport, buildCommandHash, generateCommands, onStart, getImages, getLocalizedButtons, getButtonsGeneric, getMenu, getButtons, getPreviousStepKey, gotoAll, deleteMessageIfExists, processCondition, processConditions, checkShowNext, checkRegirectConditions, executeOnEnter, goto, getPreviousStep, preventAction, getText, noButtons, extractLocalizedButtons, extractByButton, extractButton, onCommand, handlers, handlerKeys, storeUsername, processHandlers, processMesssage, updatePreviousMesssage, getFromId, processHttpMessage, restify, proxyFile, startWithSsl, startWithoutSsl, start;
       if (err != null) {
         return cb(err);
       }
@@ -118,6 +118,7 @@
       saveUser = function(chat_id, user, cb){
         return put(chat_id + ":chat_id", user, cb);
       };
+      tanos.saveUser = saveUser;
       saveGlobal = function($global, cb){
         return put('variables:global', $global, function(err){
           if (err != null) {
@@ -666,17 +667,6 @@
         currentStep != null ? currentStep.redirectCondition : void 8);
         return processConditions(redirectConditions, message, cb);
       };
-      unvarStep = function(current_step_guess, message, cb){
-        if (current_step_guess.indexOf('{{') === -1) {
-          return cb(null, current_step_guess);
-        }
-        return handlerTextUser(message.from.id, current_step_guess, function(err, current_step){
-          if (err != null) {
-            return cb(err);
-          }
-          return cb(null, current_step);
-        });
-      };
       executeOnEnter = function(menuMap, message, cb){
         var onEnter, text;
         onEnter = (function(){
@@ -697,133 +687,131 @@
           return cb(null);
         });
       };
-      goto = function(current_step_guess, message, cb){
-        console.log('goto', current_step_guess);
-        return unvarStep(current_step_guess, message, function(err, current_step){
+      goto = function(current_step, message, cb){
+        console.log('goto', current_step);
+        if (err != null) {
+          return cb(err, false);
+        }
+        return getPreviousStep(message, function(err, previous_step){
+          var previousStepKey, nameMenu;
           if (err != null) {
             return cb(err, false);
           }
-          return getPreviousStep(message, function(err, previous_step){
-            var previousStepKey, nameMenu;
+          previousStepKey = getPreviousStepKey(message);
+          nameMenu = current_step + ":bot-step";
+          return put(previousStepKey, current_step, function(err){
             if (err != null) {
               return cb(err, false);
             }
-            previousStepKey = getPreviousStepKey(message);
-            nameMenu = current_step + ":bot-step";
-            return put(previousStepKey, current_step, function(err){
-              if (err != null) {
-                return cb(err, false);
-              }
-              return get(current_step + ":bot-step", function(err, currentMap){
-                return checkRegirectConditions(currentMap, message, function(err, regirect_step){
+            return get(current_step + ":bot-step", function(err, currentMap){
+              return checkRegirectConditions(currentMap, message, function(err, regirect_step){
+                if (err != null) {
+                  return cb(err, false);
+                }
+                if (regirect_step != null) {
+                  return goto(regirect_step, message, cb);
+                }
+                if (err != null) {
+                  return cb(err, false);
+                }
+                return get("main:bot-step", function(err, mainMap){
+                  var menuMap;
                   if (err != null) {
                     return cb(err, false);
                   }
-                  if (regirect_step != null) {
-                    return goto(regirect_step, message, cb);
-                  }
-                  if (err != null) {
-                    return cb(err, false);
-                  }
-                  return get("main:bot-step", function(err, mainMap){
-                    var menuMap;
+                  menuMap = currentMap != null ? currentMap : mainMap;
+                  return executeOnEnter(menuMap, message, function(err){
+                    var chat_id;
                     if (err != null) {
                       return cb(err, false);
                     }
-                    menuMap = currentMap != null ? currentMap : mainMap;
-                    return executeOnEnter(menuMap, message, function(err){
-                      var chat_id;
+                    chat_id = message.from.id;
+                    return getMenu({
+                      chat_id: chat_id,
+                      current_step: current_step,
+                      menuMap: menuMap,
+                      previous_step: previous_step
+                    }, function(err, menuGuess){
                       if (err != null) {
                         return cb(err, false);
                       }
-                      chat_id = message.from.id;
-                      return getMenu({
+                      return getButtons({
                         chat_id: chat_id,
                         current_step: current_step,
                         menuMap: menuMap,
                         previous_step: previous_step
-                      }, function(err, menuGuess){
+                      }, function(err, buttons){
                         if (err != null) {
                           return cb(err, false);
                         }
-                        return getButtons({
-                          chat_id: chat_id,
-                          current_step: current_step,
-                          menuMap: menuMap,
-                          previous_step: previous_step
-                        }, function(err, buttons){
+                        return getImages(menuMap, function(err, images){
+                          var photo, chat;
                           if (err != null) {
                             return cb(err, false);
                           }
-                          return getImages(menuMap, function(err, images){
-                            var photo, chat;
+                          photo = (function(){
+                            switch (false) {
+                            case toString$.call(images).slice(8, -1) !== 'Undefined':
+                              return null;
+                            case toString$.call(images).slice(8, -1) !== 'Array':
+                              return images[0];
+                            case toString$.call(images).slice(8, -1) !== 'String':
+                              return images;
+                            default:
+                              return null;
+                            }
+                          }());
+                          chat = message.from;
+                          return handlerTextUser(chat_id, menuMap.text, function(err, text){
+                            var menu, messageBody;
                             if (err != null) {
                               return cb(err, false);
                             }
-                            photo = (function(){
+                            menu = (function(){
                               switch (false) {
-                              case toString$.call(images).slice(8, -1) !== 'Undefined':
+                              case !(keys(buttons).length > 0):
                                 return null;
-                              case toString$.call(images).slice(8, -1) !== 'Array':
-                                return images[0];
-                              case toString$.call(images).slice(8, -1) !== 'String':
-                                return images;
                               default:
-                                return null;
+                                return menuGuess;
                               }
                             }());
-                            chat = message.from;
-                            return handlerTextUser(chat_id, menuMap.text, function(err, text){
-                              var menu, messageBody;
+                            messageBody = {
+                              bot: bot,
+                              chat: chat,
+                              photo: photo,
+                              buttons: buttons,
+                              text: text,
+                              menu: menu,
+                              serverAddr: serverAddr
+                            };
+                            return sendMedia(messageBody, function(err, nextMessage){
                               if (err != null) {
                                 return cb(err, false);
                               }
-                              menu = (function(){
-                                switch (false) {
-                                case !(keys(buttons).length > 0):
-                                  return null;
-                                default:
-                                  return menuGuess;
-                                }
-                              }());
-                              messageBody = {
-                                bot: bot,
-                                chat: chat,
-                                photo: photo,
-                                buttons: buttons,
-                                text: text,
-                                menu: menu,
-                                serverAddr: serverAddr
-                              };
-                              return sendMedia(messageBody, function(err, nextMessage){
+                              return put(nextMessage.message_id + ":message", (import$({
+                                current_step: current_step
+                              }, messageBody)), function(err){
                                 if (err != null) {
                                   return cb(err, false);
                                 }
-                                return put(nextMessage.message_id + ":message", (import$({
-                                  current_step: current_step
-                                }, messageBody)), function(err){
-                                  if (err != null) {
-                                    return cb(err, false);
-                                  }
-                                  return get("${chat_id}." + current_step, function(err, message_id){
-                                    return deleteMessageIfExists({
-                                      chat_id: chat_id,
-                                      message_id: message_id
-                                    }, function(){
-                                      return put("${chat_id}." + current_step, nextMessage.message_id, function(err){
+                                return get("${chat_id}." + current_step, function(err, message_id){
+                                  return deleteMessageIfExists({
+                                    chat_id: chat_id,
+                                    message_id: message_id
+                                  }, function(){
+                                    return put("${chat_id}." + current_step, nextMessage.message_id, function(err){
+                                      if (err != null) {
+                                        return cb(err, false);
+                                      }
+                                      return checkShowNext(currentMap, message, function(err, show_next){
+                                        if (show_next != null) {
+                                          return goto(show_next, message, cb);
+                                        }
                                         if (err != null) {
                                           return cb(err, false);
                                         }
-                                        return checkShowNext(currentMap, message, function(err, show_next){
-                                          if (show_next != null) {
-                                            return goto(show_next, message, cb);
-                                          }
-                                          if (err != null) {
-                                            return cb(err, false);
-                                          }
-                                          console.log('YES');
-                                          return cb(null, true);
-                                        });
+                                        console.log('YES');
+                                        return cb(null, true);
                                       });
                                     });
                                   });
@@ -1074,12 +1062,7 @@
                     console.log(clickedButton);
                     buttonNotFound = message.text != null && message.data == null && clickedButton === null && previous_step !== 'main';
                     if (buttonNotFound) {
-                      console.log('!!!BUTTON-NOT-FOUND', message.text);
-                    }
-                    if (buttonNotFound) {
-                      return onCommand((import$({
-                        data: "main:" + message.text
-                      }, message)), cb);
+                      return cb(null, true);
                     }
                     clickedButton = clickedButton != null ? clickedButton : 'goto:main';
                     commands = (function(){

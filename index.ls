@@ -79,6 +79,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     save-user = (chat_id, user, cb)->
         put "#{chat_id}:chat_id", user, cb
     
+    tanos.save-user = save-user
+    
     save-global = ($global, cb)->
         err <- put \variables:global , $global
         return cb err if err?
@@ -334,11 +336,11 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
             current-step?redirect-condition |> obj-to-pairs
         process-conditions redirect-conditions, message, cb
     
-    unvar-step = (current_step_guess, message, cb)->
-        return cb null, current_step_guess if current_step_guess.index-of('{{') is -1
-        err, current_step <- handler-text-user message.from.id, current_step_guess
-        return cb err if err?
-        cb null, current_step
+    #unvar-step = (current_step_guess, message, cb)->
+    #    return cb null, current_step_guess if current_step_guess.index-of('{{') is -1
+    #    err, current_step <- handler-text-user message.from.id, current_step_guess
+    #    return cb err if err?
+    #    cb null, current_step
     
     execute-on-enter = (menu-map, message, cb)->
         on-enter = 
@@ -349,9 +351,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err <- run-commands message, text, on-enter
         return cb err if err?
         cb null
-    goto = (current_step_guess, message, cb)->
-        console.log \goto, current_step_guess
-        err, current_step <- unvar-step current_step_guess, message
+    goto = (current_step, message, cb)->
+        console.log \goto, current_step
+        #err, current_step <- unvar-step current_step_guess, message
         return cb err, no if err?
         err, previous_step <- get-previous-step message
         return cb err, no if err?
@@ -505,8 +507,9 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         console.log clicked-button
         #return cb err if err?
         button-not-found = message.text? and not message.data? and clicked-button is null and previous_step isnt \main
-        console.log \!!!BUTTON-NOT-FOUND, message.text if button-not-found
-        return on-command {data: "main:#{message.text}", ...message }, cb if button-not-found
+        #console.log \!!!BUTTON-NOT-FOUND, message.text if button-not-found
+        #return on-command {data: "main:#{message.text}", ...message }, cb if button-not-found
+        return cb null, yes if button-not-found
         
         clicked-button = clicked-button ? \goto:main
         commands =
