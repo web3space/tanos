@@ -522,7 +522,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
                 | typeof! clicked-button is \String => clicked-button.split(':').1
                 | typeof! clicked-button is \Object => clicked-button.goto
                 | _ => null
-        reutrn cb null, yes if not current_step?
+        return cb null, yes if not current_step?
         current-steps = current_step.split(',')
         #return cb null, yes if current-steps.length is 0
         #console.log { current-steps }
