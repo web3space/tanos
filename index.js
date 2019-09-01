@@ -1081,16 +1081,18 @@
                         return cb(err, false);
                       }
                       current_step = (function(){
-                        var ref$;
                         switch (false) {
                         case toString$.call(clickedButton).slice(8, -1) !== 'String':
-                          return (ref$ = clickedButton.split(':')[1]) != null ? ref$ : 'main';
+                          return clickedButton.split(':')[1];
                         case toString$.call(clickedButton).slice(8, -1) !== 'Object':
-                          return (ref$ = clickedButton.goto) != null ? ref$ : 'main';
+                          return clickedButton.goto;
                         default:
-                          return 'main';
+                          return null;
                         }
                       }());
+                      if (current_step == null) {
+                        reutrn(cb(null, true));
+                      }
                       currentSteps = current_step.split(',');
                       return gotoAll(currentSteps, message, function(err, success){
                         return cb(err, success);
