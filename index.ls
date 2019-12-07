@@ -253,7 +253,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return cb err if err?
         err, text <- handler-text-user chat_id, name
         return cb err if err?
-        item = [text, result]
+        item = [text, result, button.1]
         err, rest <- generate-commands { chat_id, current_step, previous_step, menu-map }, buttons
         return cb err if err?
         all = [item] ++ rest
@@ -489,7 +489,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         
         
     on-command = (message, cb)->
-        console.log \on-command, { message.type, message.data, message.text }
+        #console.log \on-command, { message.type, message.data, message.text }
         return cb null, no if not message?message?message_id?
         err, previous_step <- get-previous-step message
         
