@@ -351,6 +351,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err <- run-commands message, text, on-enter
         return cb err if err?
         cb null
+    state =
+        menu: null
     goto = (current_step, message, cb)->
         console.log \goto, current_step
         #err, current_step <- unvar-step current_step_guess, message
@@ -389,6 +391,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         menu = 
             | keys(buttons).length > 0 => null
             | _ => menu-guess
+        state.menu = menu ? state.menu
         message-body = { bot, chat, photo, buttons, text, menu, server-addr }
         err, next-message <- send-media message-body
         return cb err, no if err?
@@ -448,7 +451,10 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         lang = eval buttons.lang-var
         cb null, buttons[lang]    
     
-    extract-by-button = ({ message, text }, buttons, cb)->
+    extract-by-button = ({ message, text }, type, input-buttons, cb)->
+        buttons = 
+            | type isnt \menu => input-buttons
+            | _ => input-buttons #state.menu
         return cb "buttons not found" if not buttons?
         err, buttons <- extract-localized-buttons { message, buttons }
 
@@ -460,7 +466,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         res = buttons[name] ? buttons[text]
         cb null, res
     extract-button = ({ text, previous-step, main-step,  message }, cb)->
-        console.log \extract-button, text
+        #console.log \extract-button, text
         return cb "previous-step is required" if not previous-step?
         button =
             | not text? => \goto:main
@@ -471,17 +477,17 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         
         
         
-        err, button <- extract-by-button { message, text }, previous-step.buttons
+        err, button <- extract-by-button { message, text }, \buttons , previous-step.buttons
         return cb null, button if button?
         # button not found in current step, so will try to find in main step
         
-        err, button <- extract-by-button { message, text }, previous-step.menu
+        err, button <- extract-by-button { message, text }, \menu , previous-step.menu
         return cb null, button if button?
         
-        err, button <- extract-by-button { message, text }, main-step.buttons
+        err, button <- extract-by-button { message, text }, \buttons, main-step.buttons
         return cb null, button if button?
         
-        err, button <- extract-by-button { message, text }, main-step.menu
+        err, button <- extract-by-button { message, text }, \menu , main-step.menu
         return cb null, button if button?
         
         
@@ -504,7 +510,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err <- process-text-validators previous-step, { text, message.type }
         return prevent-action { bot, chat: message.from, text: "#{err}" }, cb if err?
         err, clicked-button <- extract-button { text, previous-step, main-step, message }
-        console.log clicked-button
+        #console.log clicked-button
         #return cb err if err?
         button-not-found = message.text? and not message.data? and clicked-button is null and previous_step isnt \main
         #console.log \!!!BUTTON-NOT-FOUND, message.text if button-not-found

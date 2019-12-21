@@ -482,7 +482,7 @@
             if (err != null) {
               return cb(err);
             }
-            item = [text, result];
+            item = [text, result, button[1]];
             return generateCommands({
               chat_id: chat_id,
               current_step: current_step,
@@ -1018,11 +1018,6 @@
       };
       onCommand = function(message, cb){
         var ref$;
-        console.log('on-command', {
-          type: message.type,
-          data: message.data,
-          text: message.text
-        });
         if ((message != null ? (ref$ = message.message) != null ? ref$.message_id : void 8 : void 8) == null) {
           return cb(null, false);
         }
@@ -1091,7 +1086,7 @@
                         }
                       }());
                       if (current_step == null) {
-                        reutrn(cb(null, true));
+                        return cb(null, true);
                       }
                       currentSteps = current_step.split(',');
                       return gotoAll(currentSteps, message, function(err, success){
