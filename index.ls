@@ -454,7 +454,7 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
     extract-by-button = ({ message, text }, type, input-buttons, cb)->
         buttons = 
             | type isnt \menu => input-buttons
-            | _ => input-buttons #state.menu
+            | _ => state.menu
         return cb "buttons not found" if not buttons?
         err, buttons <- extract-localized-buttons { message, buttons }
 
