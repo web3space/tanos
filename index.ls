@@ -360,6 +360,8 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         err, previous_step <- get-previous-step message
         return cb err, no if err?
         previous-step-key = get-previous-step-key message
+        err, retrieved <- retrieve-last-step-for-user message, current_step, previous_step
+        return cb err, no if err?
         name-menu = "#{current_step}:bot-step"
         err <- put previous-step-key, current_step
         return cb err, no if err?
@@ -405,6 +407,25 @@ module.exports = ({ telegram-token, app,layout, db-type, server-address, server-
         return goto show_next, message, cb if show_next?
         return cb err, no if err?
         console.log \YES
+        cb null, yes
+
+    retrieve-last-step-for-user = (message, current_step, previous_step, cb)->
+        err, $user <- get-user-by-message message
+        return cb err if err?
+        $user.currentStep = $user.currentStep ? current_step
+
+        if current_step?
+            if current_step isnt \main-step-help and previous_step isnt \main-step-help
+                if current_step is \main-step-help
+                    $user.currentStep = previous_step
+                if previous_step  is \main-step-help
+                    $user.currentStep = current_step
+            else if current_step isnt \main-step-help and previous_step is \main-step-help
+                $user.currentStep = current_step
+            else if current_step is \main-step-help and previous_step isnt \main-step-help
+                $user.currentStep = previous_step
+        err <- save-user $user.chat_id, $user
+        return cb err if err?
         cb null, yes
     
     get-previous-step = (message, cb)->
